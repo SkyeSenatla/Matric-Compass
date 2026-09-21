@@ -1,0 +1,50 @@
+@API_HostAddress = http://localhost:5146
+
+### GET all students
+GET {{API_HostAddress}}/api/students
+Accept: application/json
+
+###
+
+### GET a single student by id — replace {id} with a real id from the response above
+GET {{API_HostAddress}}/api/students/{id}
+Accept: application/json
+
+###
+
+### POST — create a student (valid body -> 201 Created + Location header)
+POST {{API_HostAddress}}/api/students
+Content-Type: application/json
+
+{
+  "fullName": "Naledi Mokoena",
+  "learnerReferenceNumber": "LRN-2026-00391"
+}
+
+###
+
+### POST — invalid body (blank name -> 400 Bad Request, thrown by Student's constructor)
+POST {{API_HostAddress}}/api/students
+Content-Type: application/json
+
+{
+  "fullName": "",
+  "learnerReferenceNumber": "LRN-2026-00392"
+}
+
+###
+
+### PUT — update a student's name -> 204 No Content. Replace {id} with a real id.
+PUT {{API_HostAddress}}/api/students/{id}
+Content-Type: application/json
+
+{
+  "fullName": "Naledi N. Mokoena"
+}
+
+###
+
+### DELETE a student -> 204 No Content the first time, 404 Not Found the second (idempotent).
+DELETE {{API_HostAddress}}/api/students/{id}
+
+###
