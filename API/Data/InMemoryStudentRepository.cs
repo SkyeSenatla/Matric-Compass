@@ -35,6 +35,12 @@ public class InMemoryStudentRepository : IStudentRepository
         return Task.FromResult(student);
     }
 
+    public Task<Student?> GetByLrnAsync(string learnerReferenceNumber)
+    {
+        var student = _students.FirstOrDefault(s => s.LearnerReferenceNumber == learnerReferenceNumber);
+        return Task.FromResult(student);
+    }
+
     public Task<Student> AddAsync(Student student)
     {
         _students.Add(student);

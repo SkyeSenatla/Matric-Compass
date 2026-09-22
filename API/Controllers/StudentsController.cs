@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using API.Models;
 using API.Data;
+using API.Services;
+using API.Common;
 
 namespace API.Controllers;
 
@@ -18,15 +20,24 @@ namespace API.Controllers;
 public class StudentsController : ControllerBase
 {
     private readonly IStudentRepository _studentRepository;
+    private readonly IStudentService _studentService;
 
     // Constructor injection: ASP.NET Core's DI container sees this controller
     // needs an IStudentRepository, looks in the container configured in
     // Program.cs, finds the registered InMemoryStudentRepository, and hands
     // it in automatically. We never write "new StudentsController(...)"
     // ourselves — the framework does that, once per request.
-    public StudentsController(IStudentRepository studentRepository)
+    //
+    // IStudentService is new today. We didn't remove IStudentRepository —
+    // GetStudentsAsync, GetStudentByIdAsync, UpdateStudentAsync and
+    // DeleteStudentAsync are still pure CRUD with no decision to move, so
+    // they stay on the repository directly. Only CreateStudentAsync and the
+    // new payments endpoint have a business rule, so only they go through
+    // the service.
+    public StudentsController(IStudentRepository studentRepository, IStudentService studentService)
     {
         _studentRepository = studentRepository;
+        _studentService = studentService;
     }
 
     // ── GET: /api/students ──────────────────────────────────────────────
@@ -36,11 +47,12 @@ public class StudentsController : ControllerBase
     // build its "Test Request" UI, and later what the frontend team's
     // generated TypeScript client depends on.
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Student>>> GetStudentsAsync()
+    public async Task<ActionResult<IEnumerable<StudentResponse>>> GetStudentsAsync()
     {
         var students = await _studentRepository.GetAllAsync();
-        return Ok(students);
-        // HTTP 200 OK, body: JSON array of Student objects.
+        return Ok(students.Select(StudentResponse.FromEntity));
+        // HTTP 200 OK, body: JSON array of StudentResponse objects — the
+        // Student entity itself never crosses the HTTP boundary (Day 2).
     }
 
     // ── GET: /api/students/{id} ─────────────────────────────────────────
@@ -48,7 +60,7 @@ public class StudentsController : ControllerBase
     // route when {id} is a syntactically valid GUID — an invalid format
     // never even reaches this method body. That's free validation.
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<Student>> GetStudentByIdAsync(Guid id)
+    public async Task<ActionResult<StudentResponse>> GetStudentByIdAsync(Guid id)
     {
         var student = await _studentRepository.GetByIdAsync(id);
 
@@ -58,45 +70,49 @@ public class StudentsController : ControllerBase
             return NotFound(); // HTTP 404 Not Found
         }
 
-        return Ok(student); // HTTP 200 OK
+        return Ok(StudentResponse.FromEntity(student)); // HTTP 200 OK
     }
 
     // ── POST: /api/students ─────────────────────────────────────────────
+    // Day 2: this is the one CRUD action that gained a real business rule
+    // (no two students share an LRN), and a real business rule is exactly
+    // what earns a class in the service layer. CreateStudentAsync now
+    // delegates entirely — it decides nothing about students, only about
+    // HTTP.
     [HttpPost]
-    public async Task<ActionResult<Student>> CreateStudentAsync(StudentCreateRequest request)
+    public async Task<ActionResult<StudentResponse>> CreateStudentAsync(StudentCreateRequest request)
     {
-        Student student;
+        CreateStudentResult result;
 
         try
         {
-            // Student's constructor is where our invariants actually live —
-            // if the request is invalid (blank name, blank LRN), the entity
-            // itself throws. The controller's job is only to translate that
-            // into an HTTP response, not to duplicate the validation rules.
-            student = new Student(request.FullName, request.LearnerReferenceNumber);
+            // Same discipline as Day 1: Student's constructor still throws on
+            // genuinely invalid input, and we still catch that here, by hand,
+            // action by action. Day 3 is where that stops being repeated.
+            result = await _studentService.CreateStudentAsync(request);
         }
         catch (ArgumentException ex)
         {
-            // Deliberately manual today: this try/catch has to be repeated in
-            // every action that might fail this way. Day 3 replaces this with
-            // centralized exception-handling middleware that does it
-            // everywhere automatically — you're meant to feel the repetition
-            // here so that later refactor makes sense.
             return BadRequest(ex.Message); // HTTP 400 Bad Request
         }
 
-        await _studentRepository.AddAsync(student);
-
         // CreatedAtAction does three things at once: sets the status code to
         // 201, sets the Location response header to the URL of the new
-        // resource (by pointing at GetStudentByIdAsync with the new id), and
-        // puts the created object in the response body. That's the complete,
-        // correct shape of a create endpoint — not just "return Ok(student)".
-        return CreatedAtAction(
-            nameof(GetStudentByIdAsync),
-            new { id = student.Id },
-            student);
-        // HTTP 201 Created
+        // resource, and puts the created object in the response body.
+        return result switch
+        {
+            CreateStudentResult.Created created =>
+                CreatedAtAction(nameof(GetStudentByIdAsync), new { id = created.Student.Id }, created.Student),
+                // HTTP 201 Created
+
+            CreateStudentResult.DuplicateLearnerReferenceNumber duplicate =>
+                ProblemResponses.Conflict(
+                    $"A student with LRN {duplicate.LearnerReferenceNumber} already exists.",
+                    "/api/students"),
+                // HTTP 409 Conflict, RFC 9457 shape
+
+            _ => throw new InvalidOperationException("Unhandled CreateStudentResult case.")
+        };
     }
 
     // ── PUT: /api/students/{id} ─────────────────────────────────────────
@@ -151,5 +167,53 @@ public class StudentsController : ControllerBase
         // Calling DELETE again on the same id now returns 404 instead of 204
         // — the response differs, but the end state (student is gone) is
         // identical either way. That's what makes DELETE idempotent.
+    }
+
+    // ── POST: /api/students/{id}/payments ───────────────────────────────
+    // Day 2: the API's first money-moving endpoint. POST is not idempotent
+    // by spec, so a network retry of this exact call must not record the
+    // fee twice — the Idempotency-Key header is how the caller and the
+    // server agree on what "the same call" means.
+    [HttpPost("{id:guid}/payments")]
+    public async Task<ActionResult<PaymentResponse>> RecordFeePaymentAsync(
+        Guid id,
+        RecordPaymentRequest request,
+        [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey)
+    {
+        if (string.IsNullOrWhiteSpace(idempotencyKey))
+        {
+            return BadRequest("Idempotency-Key header is required for this endpoint.");
+            // HTTP 400 Bad Request
+        }
+
+        var result = await _studentService.RecordFeePaymentAsync(id, idempotencyKey, request);
+
+        return result switch
+        {
+            RecordPaymentResult.Recorded r =>
+                CreatedAtAction(nameof(GetStudentByIdAsync), new { id }, r.Payment),
+                // HTTP 201 Created — a new payment was recorded
+
+            RecordPaymentResult.ReplayedFromCache r =>
+                CreatedAtAction(nameof(GetStudentByIdAsync), new { id }, r.Payment),
+                // HTTP 201 Created — but the SAME payment as the original call, not a new one
+
+            RecordPaymentResult.KeyConflict k =>
+                ProblemResponses.Conflict(
+                    $"Idempotency-Key '{k.IdempotencyKey}' was already used for a different request, or is still being processed.",
+                    $"/api/students/{id}/payments"),
+                // HTTP 409 Conflict
+
+            RecordPaymentResult.StudentNotFound =>
+                NotFound(), // HTTP 404 Not Found
+
+            RecordPaymentResult.InvalidAmount inv =>
+                ProblemResponses.UnprocessableEntity(
+                    $"Amount {inv.Amount} is not a valid payment amount.",
+                    $"/api/students/{id}/payments"),
+                // HTTP 422 Unprocessable Entity
+
+            _ => throw new InvalidOperationException("Unhandled RecordPaymentResult case.")
+        };
     }
 }

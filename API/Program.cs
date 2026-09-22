@@ -1,5 +1,6 @@
 using Scalar.AspNetCore;
 using API.Data;
+using API.Services;
 
 // ════════════════════════════════════════════════════
 // PHASE 1 — BUILDER: Register services into the
@@ -34,6 +35,16 @@ builder.Services.AddOpenApi();         // Register built-in OpenAPI document gen
 // itself is the shared state, not an in-memory object we're keeping alive
 // artificially.
 builder.Services.AddSingleton<IStudentRepository, InMemoryStudentRepository>();
+
+// Singleton for the same reason as IStudentRepository above: this needs
+// to survive between requests, and today there's exactly one process
+// holding it.
+builder.Services.AddSingleton<IIdempotencyStore, InMemoryIdempotencyStore>();
+
+// Scoped, not Singleton — unlike the two registrations above,
+// StudentService holds no state of its own between requests, so there's
+// no reason to keep one instance alive for the app's lifetime.
+builder.Services.AddScoped<IStudentService, StudentService>();
 
 // ════════════════════════════════════════════════════
 // TRANSITION — Build() seals the DI container.
