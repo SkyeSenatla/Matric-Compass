@@ -1,5 +1,7 @@
 namespace API.Models;
 
+using Domain.Entities;
+
 // The response DTO Day 1 deliberately deferred — see the comment in
 // StudentRequests.cs. A record, same discipline as StudentCreateRequest
 // and StudentUpdateRequest: flat, immutable, no behavior. FromEntity is

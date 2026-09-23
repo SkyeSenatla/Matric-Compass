@@ -1,76 +1,24 @@
 namespace API.Data;
 
-using API.Models;
+using Domain.Entities;
 
-// Implements the IStudentRepository contract using a plain in-memory List<Student>.
-//
-// This is Week 4's stand-in for a real database. The entire point of coding
-// against the IStudentRepository interface (rather than a concrete type) is
-// that this class can be deleted and replaced with an EF Core + PostgreSQL
-// implementation in Week 5 without the controller changing at all — it only
-// ever depends on the interface, never on this class directly.
-public class InMemoryStudentRepository : IStudentRepository
+// Implements IStudentRepository by inheriting the generic in-memory
+// behavior (GetAllAsync, GetByIdAsync, AddAsync, UpdateAsync, DeleteAsync)
+// from InMemoryRepository<Student>, and adding only the one lookup that's
+// specific to Student. This is Week 4's stand-in for a real database — the
+// point of coding against IStudentRepository, not this class, is that it
+// can be swapped for an EF Core + PostgreSQL implementation in Week 5
+// without the controller or service changing at all.
+public class InMemoryStudentRepository : InMemoryRepository<Student>, IStudentRepository
 {
-    // readonly because the LIST REFERENCE itself never changes after construction —
-    // we only ever mutate its contents (Add/Remove), never reassign the field.
-    private readonly List<Student> _students;
-
-    public InMemoryStudentRepository()
+    public InMemoryStudentRepository() : base(BuildSeedData())
     {
-        _students = BuildSeedData();
     }
 
-    public Task<IEnumerable<Student>> GetAllAsync()
+    public async Task<Student?> GetByLrnAsync(string learnerReferenceNumber)
     {
-        // Task.FromResult wraps an already-known value in a completed Task.
-        // Nothing here actually awaits I/O, but every repository method is
-        // still shaped as async so the signature never has to change when
-        // Week 5 swaps this body for "await _db.Students.ToListAsync()".
-        return Task.FromResult(_students.AsEnumerable());
-    }
-
-    public Task<Student?> GetByIdAsync(Guid id)
-    {
-        var student = _students.FirstOrDefault(s => s.Id == id);
-        return Task.FromResult(student);
-    }
-
-    public Task<Student?> GetByLrnAsync(string learnerReferenceNumber)
-    {
-        var student = _students.FirstOrDefault(s => s.LearnerReferenceNumber == learnerReferenceNumber);
-        return Task.FromResult(student);
-    }
-
-    public Task<Student> AddAsync(Student student)
-    {
-        _students.Add(student);
-        return Task.FromResult(student);
-    }
-
-    public Task<bool> UpdateAsync(Student student)
-    {
-        var index = _students.FindIndex(s => s.Id == student.Id);
-        if (index == -1)
-        {
-            // Honest signal to the caller: "there was nothing to update."
-            // The controller uses this to decide between 204 and 404.
-            return Task.FromResult(false);
-        }
-
-        _students[index] = student;
-        return Task.FromResult(true);
-    }
-
-    public Task<bool> DeleteAsync(Guid id)
-    {
-        var student = _students.FirstOrDefault(s => s.Id == id);
-        if (student is null)
-        {
-            return Task.FromResult(false);
-        }
-
-        _students.Remove(student);
-        return Task.FromResult(true);
+        var students = await GetAllAsync();
+        return students.FirstOrDefault(s => s.LearnerReferenceNumber == learnerReferenceNumber);
     }
 
     // Seed data lives behind the same rules as everything else that creates a

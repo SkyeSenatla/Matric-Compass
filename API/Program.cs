@@ -1,6 +1,7 @@
 using Scalar.AspNetCore;
 using API.Data;
 using API.Services;
+using Domain.Entities;
 
 // ════════════════════════════════════════════════════
 // PHASE 1 — BUILDER: Register services into the
@@ -36,15 +37,22 @@ builder.Services.AddOpenApi();         // Register built-in OpenAPI document gen
 // artificially.
 builder.Services.AddSingleton<IStudentRepository, InMemoryStudentRepository>();
 
-// Singleton for the same reason as IStudentRepository above: this needs
-// to survive between requests, and today there's exactly one process
-// holding it.
-builder.Services.AddSingleton<IIdempotencyStore, InMemoryIdempotencyStore>();
+// Day 1: TertiaryApplication needs nothing beyond the generic contract
+// yet (it's read-only for now), so it's registered straight against
+// IRepository<T> — no entity-specific interface exists for it until a
+// rule shows up that the generic shape can't cover.
+builder.Services.AddSingleton<IRepository<TertiaryApplication>, InMemoryRepository<TertiaryApplication>>();
 
-// Scoped, not Singleton — unlike the two registrations above,
-// StudentService holds no state of its own between requests, so there's
-// no reason to keep one instance alive for the app's lifetime.
+// Day 2: BursaryApplication gets the entity-specific interface Student
+// already has, for the same reason — GetByStudentIdAsync is the one
+// lookup CreateAsync's duplicate-application rule needs beyond generic CRUD.
+builder.Services.AddSingleton<IBursaryApplicationRepository, InMemoryBursaryApplicationRepository>();
+
+// Scoped, not Singleton — neither service below holds state of its own
+// between requests, so there's no reason to keep one instance alive for
+// the app's lifetime.
 builder.Services.AddScoped<IStudentService, StudentService>();
+builder.Services.AddScoped<IBursaryApplicationService, BursaryApplicationService>();
 
 // ════════════════════════════════════════════════════
 // TRANSITION — Build() seals the DI container.
@@ -64,6 +72,40 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapControllers(); // Activates attribute routing for all [ApiController] classes
+
+// ── Seed data that references OTHER seed data ───────────────────────────
+// TertiaryApplication and BursaryApplication both need a real StudentId,
+// and Student's seeded ids are only known once InMemoryStudentRepository
+// has actually constructed them (they're randomly generated, not fixed).
+// So this can't happen inside builder.Services like the repositories
+// above — it has to run after the container is built, once, against the
+// real registered instances. CreateScope() mirrors how a real request
+// would resolve these services, even though nothing here is a request.
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    var studentRepository = services.GetRequiredService<IStudentRepository>();
+    var tertiaryApplicationRepository = services.GetRequiredService<IRepository<TertiaryApplication>>();
+    var bursaryApplicationRepository = services.GetRequiredService<IBursaryApplicationRepository>();
+
+    var thandiwe = await studentRepository.GetByLrnAsync("LRN-2026-00114");
+    var sipho = await studentRepository.GetByLrnAsync("LRN-2026-00287");
+
+    if (thandiwe is not null && sipho is not null)
+    {
+        await tertiaryApplicationRepository.AddAsync(
+            new TertiaryApplication(thandiwe.Id, "University of Pretoria", "BSc Computer Science"));
+        await tertiaryApplicationRepository.AddAsync(
+            new TertiaryApplication(sipho.Id, "University of Johannesburg", "BCom Accounting"));
+
+        await bursaryApplicationRepository.AddAsync(
+            new BursaryApplication(thandiwe.Id, "NSFAS", 45000m, DateTime.UtcNow.AddMonths(2),
+                new[] { "Certified ID Copy", "Proof of Household Income" }));
+        await bursaryApplicationRepository.AddAsync(
+            new BursaryApplication(sipho.Id, "Funza Lushaka", 60000m, DateTime.UtcNow.AddMonths(1),
+                new[] { "Certified ID Copy", "Academic Transcript" }));
+    }
+}
 
 // ── For reference only: this is what the same GET endpoint would look like
 // as a Minimal API instead of a controller action (see StudentsController).

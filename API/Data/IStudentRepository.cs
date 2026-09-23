@@ -1,14 +1,13 @@
-namespace API.Data; 
-using API.Models; 
+namespace API.Data;
 
-//	The	contract.	Controllers	depend	on	THIS,	never	on	a	concrete
-//	implementation.	Every	method	is	async	—	see	Phase	4's	rule.
-public	interface	IStudentRepository
+using Domain.Entities;
+
+// Student needs one lookup the generic contract doesn't offer. That's
+// exactly what "IRepository<T> introduced FOR Student" means in practice:
+// the generic interface covers the CRUD every entity shares, and a
+// specific interface adds only what this one entity actually needs on
+// top of it — GetByLrnAsync, for the duplicate-LRN rule in StudentService.
+public interface IStudentRepository : IRepository<Student>
 {
-Task<IEnumerable<Student>>	GetAllAsync();
-Task<Student?>	GetByIdAsync(Guid	id);
-Task<Student?>	GetByLrnAsync(string	learnerReferenceNumber);
-Task<Student>	AddAsync(Student	student);
-Task<bool>	UpdateAsync(Student	student);
-Task<bool>	DeleteAsync(Guid	id);
+    Task<Student?> GetByLrnAsync(string learnerReferenceNumber);
 }
