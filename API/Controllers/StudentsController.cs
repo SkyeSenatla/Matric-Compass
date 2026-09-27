@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using API.Models;
 using API.Data;
 using API.Services;
-using API.Common;
+using Domain.Exceptions;
 
 namespace API.Controllers;
 
@@ -62,13 +62,8 @@ public class StudentsController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<StudentResponse>> GetStudentByIdAsync(Guid id)
     {
-        var student = await _studentRepository.GetByIdAsync(id);
-
-        if (student is null)
-        {
-            // Guard clause: fail fast, keep the success path unindented below.
-            return NotFound(); // HTTP 404 Not Found
-        }
+        var student = await _studentRepository.GetByIdAsync(id)
+            ?? throw new NotFoundException($"Student {id} was not found.");
 
         return Ok(StudentResponse.FromEntity(student)); // HTTP 200 OK
     }
@@ -79,66 +74,39 @@ public class StudentsController : ControllerBase
     // what earns a class in the service layer. CreateStudentAsync now
     // delegates entirely — it decides nothing about students, only about
     // HTTP.
+    //
+    // Day 3: no try/catch left here. StudentService throws ConflictException
+    // on a duplicate LRN and Student's own constructor throws
+    // ArgumentException on malformed input — both land in
+    // DomainExceptionHandler without this action needing to know either
+    // exists.
     [HttpPost]
     public async Task<ActionResult<StudentResponse>> CreateStudentAsync(StudentCreateRequest request)
     {
-        CreateStudentResult result;
-
-        try
-        {
-            // Same discipline as Day 1: Student's constructor still throws on
-            // genuinely invalid input, and we still catch that here, by hand,
-            // action by action. Day 3 is where that stops being repeated.
-            result = await _studentService.CreateStudentAsync(request);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(ex.Message); // HTTP 400 Bad Request
-        }
+        var student = await _studentService.CreateStudentAsync(request);
 
         // CreatedAtAction does three things at once: sets the status code to
         // 201, sets the Location response header to the URL of the new
         // resource, and puts the created object in the response body.
-        return result switch
-        {
-            CreateStudentResult.Created created =>
-                CreatedAtAction(nameof(GetStudentByIdAsync), new { id = created.Student.Id }, created.Student),
-                // HTTP 201 Created
-
-            CreateStudentResult.DuplicateLearnerReferenceNumber duplicate =>
-                ProblemResponses.Conflict(
-                    $"A student with LRN {duplicate.LearnerReferenceNumber} already exists.",
-                    "/api/students"),
-                // HTTP 409 Conflict, RFC 9457 shape
-
-            _ => throw new InvalidOperationException("Unhandled CreateStudentResult case.")
-        };
+        return CreatedAtAction(nameof(GetStudentByIdAsync), new { id = student.Id }, student);
+        // HTTP 201 Created
     }
 
     // ── PUT: /api/students/{id} ─────────────────────────────────────────
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> UpdateStudentAsync(Guid id, StudentUpdateRequest request)
     {
-        var student = await _studentRepository.GetByIdAsync(id);
+        var student = await _studentRepository.GetByIdAsync(id)
+            ?? throw new NotFoundException($"Student {id} was not found.");
 
-        if (student is null)
-        {
-            return NotFound(); // HTTP 404 Not Found — nothing to update
-        }
-
-        try
-        {
-            // Same discipline as creation: the entity validates itself via
-            // UpdateFullName(). We deliberately do NOT do
-            // "student.FullName = request.FullName" here — the setter is
-            // private, so the compiler won't even let us. That's the rich
-            // domain model holding up under a write operation, not just a read.
-            student.UpdateFullName(request.FullName);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(ex.Message); // HTTP 400 Bad Request
-        }
+        // Same discipline as creation: the entity validates itself via
+        // UpdateFullName(). We deliberately do NOT do
+        // "student.FullName = request.FullName" here — the setter is
+        // private, so the compiler won't even let us. That's the rich
+        // domain model holding up under a write operation, not just a read.
+        // A malformed name throws ArgumentException, caught centrally by
+        // DomainExceptionHandler — nothing local catches it anymore.
+        student.UpdateFullName(request.FullName);
 
         await _studentRepository.UpdateAsync(student);
 
@@ -155,17 +123,16 @@ public class StudentsController : ControllerBase
     {
         // DeleteAsync returning bool means we don't need a separate fetch
         // just to check existence first — one repository call gives us
-        // everything needed to decide between 204 and 404.
+        // everything needed to decide between 204 and NotFoundException.
         var deleted = await _studentRepository.DeleteAsync(id);
 
         if (!deleted)
-        {
-            return NotFound(); // HTTP 404 Not Found
-        }
+            throw new NotFoundException($"Student {id} was not found.");
 
         return NoContent(); // HTTP 204 No Content
-        // Calling DELETE again on the same id now returns 404 instead of 204
-        // — the response differs, but the end state (student is gone) is
-        // identical either way. That's what makes DELETE idempotent.
+        // Calling DELETE again on the same id now throws NotFoundException
+        // instead of 204 — the response differs, but the end state (student
+        // is gone) is identical either way. That's what makes DELETE
+        // idempotent.
     }
 }

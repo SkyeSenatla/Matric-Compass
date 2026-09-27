@@ -4,5 +4,5 @@ using API.Models;
 
 public interface IStudentService
 {
-    Task<CreateStudentResult> CreateStudentAsync(StudentCreateRequest request);
+    Task<StudentResponse> CreateStudentAsync(StudentCreateRequest request);
 }

@@ -1,15 +1,17 @@
 using Microsoft.AspNetCore.Mvc;
+using FluentValidation;
 using API.Models;
 using API.Data;
 using API.Services;
-using API.Common;
+using Domain.Exceptions;
 
 namespace API.Controllers;
 
-// Day 2's full slice: DTOs separated from the entity, a service layer
-// holding the one rule that needs it, RFC 9457 Problem Details on every
-// business failure, and all four codes from the decision table
-// (201+Location, 404, 409, 422).
+// Day 3's full slice: FluentValidation stops a malformed request at the
+// door, and every business-rule/not-found failure is a thrown domain
+// exception caught exactly once, centrally, by DomainExceptionHandler —
+// no try/catch, no switch on a result type, and no hand-written
+// NotFound() guard left in this class.
 //
 // Route spelled out explicitly for the same reason as
 // TertiaryApplicationsController: [Route("api/[controller]")] would
@@ -41,70 +43,32 @@ public class BursaryApplicationsController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<BursaryApplicationResponse>> GetByIdAsync(Guid id)
     {
-        var application = await _bursaryApplicationRepository.GetByIdAsync(id);
-
-        if (application is null)
-            return NotFound(); // HTTP 404 Not Found
+        var application = await _bursaryApplicationRepository.GetByIdAsync(id)
+            ?? throw new NotFoundException($"Bursary application {id} was not found.");
 
         return Ok(BursaryApplicationResponse.FromEntity(application)); // HTTP 200 OK
     }
 
     [HttpPost]
-    public async Task<ActionResult<BursaryApplicationResponse>> CreateAsync(BursaryApplicationCreateRequest request)
+    public async Task<ActionResult<BursaryApplicationResponse>> CreateAsync(
+        BursaryApplicationCreateRequest request,
+        IValidator<BursaryApplicationCreateRequest> validator)
     {
-        CreateBursaryApplicationResult result;
+        await validator.ValidateAndThrowAsync(request); // throws FluentValidation.ValidationException
 
-        try
-        {
-            // Same discipline as CreateStudentAsync: BursaryApplication's
-            // own constructor still throws on genuinely malformed input
-            // (blank funder, non-positive amount), and we still catch that
-            // here, by hand, action by action.
-            result = await _bursaryApplicationService.CreateAsync(request);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(ex.Message); // HTTP 400 Bad Request
-        }
+        var application = await _bursaryApplicationService.CreateAsync(request);
 
-        return result switch
-        {
-            CreateBursaryApplicationResult.Created created =>
-                CreatedAtAction(nameof(GetByIdAsync), new { id = created.Application.Id }, created.Application),
-                // HTTP 201 Created + Location
-
-            CreateBursaryApplicationResult.DuplicateActiveApplication duplicate =>
-                ProblemResponses.Conflict(
-                    $"This student already has an active bursary application with {duplicate.Funder}.",
-                    "/api/bursary-applications"),
-                // HTTP 409 Conflict
-
-            CreateBursaryApplicationResult.DeadlineInPast deadline =>
-                ProblemResponses.UnprocessableEntity(
-                    $"Deadline {deadline.Deadline:yyyy-MM-dd} is in the past.",
-                    "/api/bursary-applications"),
-                // HTTP 422 Unprocessable Entity
-
-            _ => throw new InvalidOperationException("Unhandled CreateBursaryApplicationResult case.")
-        };
+        return CreatedAtAction(nameof(GetByIdAsync), new { id = application.Id }, application);
+        // HTTP 201 Created + Location
     }
 
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> UpdateAsync(Guid id, BursaryApplicationUpdateRequest request)
     {
-        var application = await _bursaryApplicationRepository.GetByIdAsync(id);
+        var application = await _bursaryApplicationRepository.GetByIdAsync(id)
+            ?? throw new NotFoundException($"Bursary application {id} was not found.");
 
-        if (application is null)
-            return NotFound(); // HTTP 404 Not Found — nothing to update
-
-        try
-        {
-            application.UpdateDetails(request.Amount, request.Deadline);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(ex.Message); // HTTP 400 Bad Request
-        }
+        application.UpdateDetails(request.Amount, request.Deadline);
 
         await _bursaryApplicationRepository.UpdateAsync(application);
 
@@ -117,7 +81,7 @@ public class BursaryApplicationsController : ControllerBase
         var deleted = await _bursaryApplicationRepository.DeleteAsync(id);
 
         if (!deleted)
-            return NotFound(); // HTTP 404 Not Found
+            throw new NotFoundException($"Bursary application {id} was not found.");
 
         return NoContent(); // HTTP 204 No Content
     }

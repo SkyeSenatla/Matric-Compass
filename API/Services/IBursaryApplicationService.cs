@@ -4,5 +4,5 @@ using API.Models;
 
 public interface IBursaryApplicationService
 {
-    Task<CreateBursaryApplicationResult> CreateAsync(BursaryApplicationCreateRequest request);
+    Task<BursaryApplicationResponse> CreateAsync(BursaryApplicationCreateRequest request);
 }

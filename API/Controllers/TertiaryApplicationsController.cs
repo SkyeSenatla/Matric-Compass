@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using API.Models;
 using API.Data;
 using Domain.Entities;
+using Domain.Exceptions;
 
 namespace API.Controllers;
 
@@ -36,10 +37,8 @@ public class TertiaryApplicationsController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<TertiaryApplicationResponse>> GetByIdAsync(Guid id)
     {
-        var application = await _tertiaryApplicationRepository.GetByIdAsync(id);
-
-        if (application is null)
-            return NotFound(); // HTTP 404 Not Found
+        var application = await _tertiaryApplicationRepository.GetByIdAsync(id)
+            ?? throw new NotFoundException($"Tertiary application {id} was not found.");
 
         return Ok(TertiaryApplicationResponse.FromEntity(application)); // HTTP 200 OK
     }
