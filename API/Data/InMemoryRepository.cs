@@ -8,44 +8,42 @@ using Domain.Entities;
 // write this same List</T>/FirstOrDefault/Add pattern again for every new
 // entity. IStudentRepository and IBursaryApplicationRepository both build
 // on this instead of duplicating it.
+// Day 4: backing storage is a Dictionary<Guid, T>, not a List<T> — purely
+// an internal change. The public contract (GetAllAsync, GetByIdAsync,
+// AddAsync, UpdateAsync, DeleteAsync) promises exactly what it promised
+// before: find by id, delete returns whether it existed. Every test written
+// against this class (unit and integration, Demos 3-5) still passes without
+// modification, because none of them were coupled to how the repository
+// stores data — only to what it guarantees. See Demo 6's talking points.
 public class InMemoryRepository<T> : IRepository<T> where T : class, IEntity
 {
-    private readonly List<T> _items;
+    private readonly Dictionary<Guid, T> _items;
 
     public InMemoryRepository(IEnumerable<T>? seed = null)
     {
-        _items = seed?.ToList() ?? new List<T>();
+        _items = seed?.ToDictionary(x => x.Id) ?? new Dictionary<Guid, T>();
     }
 
     public Task<IEnumerable<T>> GetAllAsync() =>
-        Task.FromResult(_items.AsEnumerable());
+        Task.FromResult(_items.Values.AsEnumerable());
 
     public Task<T?> GetByIdAsync(Guid id) =>
-        Task.FromResult(_items.FirstOrDefault(x => x.Id == id));
+        Task.FromResult(_items.TryGetValue(id, out var item) ? item : null);
 
     public Task<T> AddAsync(T entity)
     {
-        _items.Add(entity);
+        _items[entity.Id] = entity;
         return Task.FromResult(entity);
     }
 
     public Task<bool> UpdateAsync(T entity)
     {
-        var index = _items.FindIndex(x => x.Id == entity.Id);
-        if (index == -1)
+        if (!_items.ContainsKey(entity.Id))
             return Task.FromResult(false);
 
-        _items[index] = entity;
+        _items[entity.Id] = entity;
         return Task.FromResult(true);
     }
 
-    public Task<bool> DeleteAsync(Guid id)
-    {
-        var item = _items.FirstOrDefault(x => x.Id == id);
-        if (item is null)
-            return Task.FromResult(false);
-
-        _items.Remove(item);
-        return Task.FromResult(true);
-    }
+    public Task<bool> DeleteAsync(Guid id) => Task.FromResult(_items.Remove(id));
 }

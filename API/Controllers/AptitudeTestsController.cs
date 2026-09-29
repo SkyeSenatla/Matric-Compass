@@ -33,7 +33,15 @@ public class AptitudeTestsController : ControllerBase
         return Ok(tests.Select(AptitudeTestResponse.FromEntity)); // HTTP 200 OK
     }
 
+    /// <summary>
+    /// Gets a single aptitude test result by id.
+    /// </summary>
+    /// <param name="id">The aptitude test's id.</param>
+    /// <response code="200">The aptitude test was found.</response>
+    /// <response code="404">No aptitude test exists with this id.</response>
     [HttpGet("{id:guid}")]
+    [ProducesResponseType(typeof(AptitudeTestResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<AptitudeTestResponse>> GetByIdAsync(Guid id)
     {
         var test = await _aptitudeTestRepository.GetByIdAsync(id)
@@ -42,7 +50,16 @@ public class AptitudeTestsController : ControllerBase
         return Ok(AptitudeTestResponse.FromEntity(test)); // HTTP 200 OK
     }
 
+    /// <summary>
+    /// Records a new aptitude test result for a student and generates career recommendations.
+    /// </summary>
+    /// <param name="request">The student, test type, date taken and score.</param>
+    /// <param name="validator">Resolved from DI; validates the request shape.</param>
+    /// <response code="201">The test result was recorded.</response>
+    /// <response code="400">The request failed validation (see the FluentValidation rules).</response>
     [HttpPost]
+    [ProducesResponseType(typeof(AptitudeTestResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<AptitudeTestResponse>> CreateAsync(
         AptitudeTestCreateRequest request,
         IValidator<AptitudeTestCreateRequest> validator)

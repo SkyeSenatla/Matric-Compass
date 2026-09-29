@@ -40,7 +40,15 @@ public class BursaryApplicationsController : ControllerBase
         // HTTP 200 OK
     }
 
+    /// <summary>
+    /// Gets a single bursary application by id.
+    /// </summary>
+    /// <param name="id">The bursary application's id.</param>
+    /// <response code="200">The bursary application was found.</response>
+    /// <response code="404">No bursary application exists with this id.</response>
     [HttpGet("{id:guid}")]
+    [ProducesResponseType(typeof(BursaryApplicationResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<BursaryApplicationResponse>> GetByIdAsync(Guid id)
     {
         var application = await _bursaryApplicationRepository.GetByIdAsync(id)
@@ -49,7 +57,24 @@ public class BursaryApplicationsController : ControllerBase
         return Ok(BursaryApplicationResponse.FromEntity(application)); // HTTP 200 OK
     }
 
+    /// <summary>
+    /// Creates a new bursary application for a student.
+    /// </summary>
+    /// <remarks>
+    /// Rejects a deadline in the past and a second active application with the
+    /// same funder for the same student — see the 409 and 422 responses below.
+    /// </remarks>
+    /// <param name="request">The funder, amount, deadline and required documents.</param>
+    /// <param name="validator">Resolved from DI; validates the request shape.</param>
+    /// <response code="201">The application was created.</response>
+    /// <response code="400">The request failed validation (see the FluentValidation rules).</response>
+    /// <response code="409">This student already has an active application with this funder.</response>
+    /// <response code="422">The deadline is in the past.</response>
     [HttpPost]
+    [ProducesResponseType(typeof(BursaryApplicationResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<BursaryApplicationResponse>> CreateAsync(
         BursaryApplicationCreateRequest request,
         IValidator<BursaryApplicationCreateRequest> validator)
@@ -62,7 +87,16 @@ public class BursaryApplicationsController : ControllerBase
         // HTTP 201 Created + Location
     }
 
+    /// <summary>
+    /// Updates the amount and deadline of an existing bursary application.
+    /// </summary>
+    /// <param name="id">The bursary application's id.</param>
+    /// <param name="request">The new amount and deadline.</param>
+    /// <response code="204">The application was updated.</response>
+    /// <response code="404">No bursary application exists with this id.</response>
     [HttpPut("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateAsync(Guid id, BursaryApplicationUpdateRequest request)
     {
         var application = await _bursaryApplicationRepository.GetByIdAsync(id)
@@ -75,7 +109,15 @@ public class BursaryApplicationsController : ControllerBase
         return NoContent(); // HTTP 204 No Content
     }
 
+    /// <summary>
+    /// Deletes a bursary application.
+    /// </summary>
+    /// <param name="id">The bursary application's id.</param>
+    /// <response code="204">The application was deleted.</response>
+    /// <response code="404">No bursary application exists with this id.</response>
     [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteAsync(Guid id)
     {
         var deleted = await _bursaryApplicationRepository.DeleteAsync(id);

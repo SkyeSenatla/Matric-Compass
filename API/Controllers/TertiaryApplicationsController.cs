@@ -34,7 +34,15 @@ public class TertiaryApplicationsController : ControllerBase
         // HTTP 200 OK
     }
 
+    /// <summary>
+    /// Gets a single tertiary application by id.
+    /// </summary>
+    /// <param name="id">The tertiary application's id.</param>
+    /// <response code="200">The tertiary application was found.</response>
+    /// <response code="404">No tertiary application exists with this id.</response>
     [HttpGet("{id:guid}")]
+    [ProducesResponseType(typeof(TertiaryApplicationResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<TertiaryApplicationResponse>> GetByIdAsync(Guid id)
     {
         var application = await _tertiaryApplicationRepository.GetByIdAsync(id)

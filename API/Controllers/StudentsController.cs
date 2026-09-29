@@ -59,7 +59,15 @@ public class StudentsController : ControllerBase
     // The ":guid" route constraint means ASP.NET Core only matches this
     // route when {id} is a syntactically valid GUID — an invalid format
     // never even reaches this method body. That's free validation.
+    /// <summary>
+    /// Gets a single student by id.
+    /// </summary>
+    /// <param name="id">The student's id.</param>
+    /// <response code="200">The student was found.</response>
+    /// <response code="404">No student exists with this id.</response>
     [HttpGet("{id:guid}")]
+    [ProducesResponseType(typeof(StudentResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<StudentResponse>> GetStudentByIdAsync(Guid id)
     {
         var student = await _studentRepository.GetByIdAsync(id)
@@ -80,7 +88,21 @@ public class StudentsController : ControllerBase
     // ArgumentException on malformed input — both land in
     // DomainExceptionHandler without this action needing to know either
     // exists.
+    /// <summary>
+    /// Creates a new student record.
+    /// </summary>
+    /// <remarks>
+    /// Rejects a learner reference number that already belongs to another
+    /// student — see the 409 response below.
+    /// </remarks>
+    /// <param name="request">The student's full name and learner reference number.</param>
+    /// <response code="201">The student was created.</response>
+    /// <response code="400">The request failed validation.</response>
+    /// <response code="409">A student with this learner reference number already exists.</response>
     [HttpPost]
+    [ProducesResponseType(typeof(StudentResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<StudentResponse>> CreateStudentAsync(StudentCreateRequest request)
     {
         var student = await _studentService.CreateStudentAsync(request);
@@ -93,7 +115,16 @@ public class StudentsController : ControllerBase
     }
 
     // ── PUT: /api/students/{id} ─────────────────────────────────────────
+    /// <summary>
+    /// Updates a student's full name.
+    /// </summary>
+    /// <param name="id">The student's id.</param>
+    /// <param name="request">The new full name.</param>
+    /// <response code="204">The student was updated.</response>
+    /// <response code="404">No student exists with this id.</response>
     [HttpPut("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateStudentAsync(Guid id, StudentUpdateRequest request)
     {
         var student = await _studentRepository.GetByIdAsync(id)
@@ -118,7 +149,15 @@ public class StudentsController : ControllerBase
     }
 
     // ── DELETE: /api/students/{id} ──────────────────────────────────────
+    /// <summary>
+    /// Deletes a student.
+    /// </summary>
+    /// <param name="id">The student's id.</param>
+    /// <response code="204">The student was deleted.</response>
+    /// <response code="404">No student exists with this id.</response>
     [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteStudentAsync(Guid id)
     {
         // DeleteAsync returning bool means we don't need a separate fetch
