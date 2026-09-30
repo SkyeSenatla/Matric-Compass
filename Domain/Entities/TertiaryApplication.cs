@@ -20,11 +20,18 @@ public enum TertiaryApplicationStatus
 // into an invalid state.
 public class TertiaryApplication : IEntity
 {
-    public Guid Id { get; }
-    public Guid StudentId { get; }
-    public string InstitutionName { get; }
-    public string ProgrammeName { get; }
-    public TertiaryApplicationStatus Status { get; }
+    public Guid Id { get; private set; }
+    public Guid StudentId { get; private set; }
+    public string InstitutionName { get; private set; }
+    public string ProgrammeName { get; private set; }
+    public TertiaryApplicationStatus Status { get; private set; }
+
+    // For EF Core only — see Student's private constructor.
+    private TertiaryApplication()
+    {
+        InstitutionName = null!;
+        ProgrammeName = null!;
+    }
 
     public TertiaryApplication(Guid studentId, string institutionName, string programmeName)
     {

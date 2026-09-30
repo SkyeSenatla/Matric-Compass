@@ -8,9 +8,9 @@ Built incrementally as a teaching project: each week/day adds one deliberate con
 
 - **.NET 10** / ASP.NET Core Web API (controllers, not minimal APIs — see `Program.cs` for why)
 - **FluentValidation** for request-shape validation
+- **EF Core** + **PostgreSQL** (Npgsql) for `Student` persistence; everything else is still in-memory — see [Current limitations](#current-limitations)
 - **Microsoft.AspNetCore.OpenApi** + **Scalar** for API documentation (`/scalar/v1`)
 - **xUnit** + `Microsoft.AspNetCore.Mvc.Testing` (`WebApplicationFactory`) for tests
-- In-memory storage only, for now — see [Current limitations](#current-limitations)
 
 ## Project structure
 
@@ -22,7 +22,9 @@ Domain/            Entities and domain exceptions — no framework dependencies
 API/                The web project
   Controllers/      One controller per entity — Students, TertiaryApplications, BursaryApplications, AptitudeTests
   Services/         Business rules that span more than one entity or need a repository read first
-  Data/             IRepository<T> + an in-memory implementation per entity
+  Data/             IRepository<T>; an in-memory implementation per entity, plus MatricCompassDbContext
+                    and EfStudentRepository (the one entity backed by a real database so far)
+  Migrations/       EF Core code-first migrations (git-tracked; review before running database update)
   Validation/       FluentValidation validators for incoming request DTOs
   Models/           Request/response DTOs — entities never cross the HTTP boundary directly
   Common/           DomainExceptionHandler — the single catch site for every domain failure
@@ -32,6 +34,7 @@ API.Tests/          xUnit test project
   ErrorShapeTests     Integration tests proving each failure mode returns the right ProblemDetails shape
   HappyPathTests      Integration tests proving success paths work end to end through the real pipeline
   IdempotencyTests     Integration tests for idempotency guarantees and validation boundary conditions
+  TransactionTests     Proves an explicit EF Core transaction rollback leaves no trace
 ```
 
 ## Domain model
@@ -86,14 +89,33 @@ Every documented status code above is also declared on its controller action via
 
 ## Running the API
 
+`Student` is backed by a real PostgreSQL database now, so there's a one-time setup step before `dotnet run` works:
+
 ```bash
-dotnet run --project API
+# 1. Start a local Postgres instance (Docker)
+docker run --name matric-compass-postgres -e POSTGRES_PASSWORD=devpassword -p 5432:5432 -d postgres:17
+
+# 2. Point the app at it via user secrets (never appsettings.json — see below)
+cd API
+dotnet user-secrets set "ConnectionStrings:MatricCompass" "Host=localhost;Port=5432;Database=matric_compass;Username=postgres;Password=devpassword"
+
+# 3. Run — migrations apply automatically on startup (Database.MigrateAsync())
+dotnet run
 ```
 
 - Swagger/OpenAPI JSON: `http://localhost:<port>/openapi/v1.json`
 - Interactive docs (Scalar): `http://localhost:<port>/scalar/v1`
 
-The app seeds two students (with subjects, a tertiary application, and a bursary application each) on startup — see the bottom of `API/Program.cs`.
+The app seeds two students (with subjects, a tertiary application, and a bursary application each) on startup, idempotently — see the bottom of `API/Program.cs`. `TertiaryApplication` and `BursaryApplication` reset every restart (still in-memory); `Student` rows persist in Postgres across restarts.
+
+To generate a new migration after changing an entity or `MatricCompassDbContext`:
+
+```bash
+dotnet ef migrations add <Name> --project API --startup-project API
+dotnet ef database update --project API --startup-project API
+```
+
+Always read a generated migration before running it against a shared database — it's the one reviewable artifact that catches a silent drop-and-recreate hiding behind what looks like a rename.
 
 ## Testing
 
@@ -112,7 +134,9 @@ A refactor that changes *how* something works (e.g. the in-memory repositories' 
 
 This is a teaching snapshot, not a finished product. Known gaps, left in deliberately as the next round of work:
 
-- **Storage is in-memory only.** Every repository is a `Dictionary<Guid, T>` living in process memory (`API/Data/InMemoryRepository.cs`) — restarting the app loses all data. A real database (EF Core + PostgreSQL) is the planned replacement; the code is already split behind repository interfaces so that swap shouldn't touch controllers or services.
+- **Only `Student` is backed by a real database.** `TertiaryApplication`, `BursaryApplication`, and `AptitudeTest` are still `Dictionary<Guid, T>` in-memory repositories (`API/Data/InMemoryRepository.cs`) — restarting the app resets them. `EfStudentRepository` is the template the same swap gets applied to for the other three.
+- **`Student.SubjectCodes`, `BursaryApplication.RequiredDocuments`, and `AptitudeTest.RecommendedCareers` are not persisted.** They're computed, read-only wrapper properties over a private field, which EF Core can't map — `MatricCompassDbContext.OnModelCreating` explicitly `Ignore()`s all three for now. Concretely: seeded subjects currently do **not** survive a read back from Postgres (`GET /api/students` shows `subjectCodes: []`). The real fix is replacing `SubjectCodes` with a proper `Subject` entity and a one-to-many relationship, not a workaround to make the existing shape persist.
 - **No authentication/authorization.** Every endpoint is open.
 - **`TertiaryApplication` is read-only** — no create/update/delete endpoint yet, and no service layer for advancing an application through its status pipeline (`Researching` → ... → `Accepted`/`Rejected`).
 - **Not every endpoint has a `[ProducesResponseType]`/XML summary yet** — every `GetAll` action (across all four controllers) is undocumented and untested by design, as a standing exercise in applying the same pattern already used everywhere else.
+- **Integration tests that touch the database run serially, not in parallel** (`API.Tests/AssemblyInfo.cs`) — they share one real Postgres instance now, not an isolated in-memory dictionary per test class, so concurrent seeding at startup can race.

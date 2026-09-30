@@ -4,12 +4,24 @@ using API.Data;
 using API.Services;
 using Domain.Entities;
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
 
 // ════════════════════════════════════════════════════
 // PHASE 1 — BUILDER: Register services into the
 // Dependency Injection container
 // ════════════════════════════════════════════════════
 var builder = WebApplication.CreateBuilder(args);
+
+// Week 5: a connection string has a password in it — it lives in user
+// secrets (`dotnet user-secrets set ...`, see the API project's
+// UserSecretsId), never in appsettings.json, never committed. Failing
+// loudly here, at startup, with a message that names the exact command to
+// fix it, beats a silent null connection string failing confusingly three
+// layers deeper the first time something tries to query.
+var connectionString = builder.Configuration.GetConnectionString("MatricCompass")
+    ?? throw new InvalidOperationException(
+        "Connection string 'MatricCompass' was not found. Run 'dotnet user-secrets set " +
+        "ConnectionStrings:MatricCompass \"...\"' inside the API project.");
 
 // Since .NET 8, ASP.NET Core trims the "Async" suffix off action names by
 // default when it builds the route table (MvcOptions.SuppressAsyncSuffixInActionNames
@@ -39,18 +51,29 @@ builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 builder.Services.AddProblemDetails(); // fallback shape for anything the handler above doesn't catch
 
+// Week 5: connection pooling is on by default in the connection string
+// above — nothing to add for that. EnableRetryOnFailure() is not
+// automatic, and it's the first time this app has had to think about a
+// network call that can fail for reasons that have nothing to do with the
+// request itself (a dropped connection, a Postgres restart mid-query).
+builder.Services.AddDbContext<MatricCompassDbContext>(options =>
+    options.UseNpgsql(connectionString, npgsqlOptions =>
+        npgsqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 3,
+            maxRetryDelay: TimeSpan.FromSeconds(5),
+            errorCodesToAdd: null)));
+
 // Register the repository abstraction: any controller that asks for
 // IStudentRepository in its constructor receives this instance automatically.
-// We never call "new InMemoryStudentRepository()" anywhere else in the app.
+// We never call "new EfStudentRepository()" anywhere else in the app.
 //
-// Why AddSingleton? Our "database" is just a List<Student> living in process
-// memory. If this were Scoped or Transient, a brand-new empty list would be
-// created on every request (or every scope), and our data would vanish
-// between calls. Singleton is correct TODAY ONLY — once Week 5 introduces a
-// real database, Scoped becomes the right lifetime, because the database
-// itself is the shared state, not an in-memory object we're keeping alive
-// artificially.
-builder.Services.AddSingleton<IStudentRepository, InMemoryStudentRepository>();
+// Week 5: Scoped, not Singleton — this is the lifetime flip Day 1's slide
+// deck warned about. A DbContext must not survive past one request, and
+// EfStudentRepository holds one, so nothing that depends on it can be
+// Singleton anymore without recreating that exact bug. Students now live in
+// the real database (see MatricCompassDbContext); TertiaryApplication,
+// BursaryApplication, and AptitudeTest stay in-memory a while longer.
+builder.Services.AddScoped<IStudentRepository, EfStudentRepository>();
 
 // Day 1: TertiaryApplication needs nothing beyond the generic contract
 // yet (it's read-only for now), so it's registered straight against
@@ -101,15 +124,43 @@ app.MapControllers(); // Activates attribute routing for all [ApiController] cla
 
 // ── Seed data that references OTHER seed data ───────────────────────────
 // TertiaryApplication and BursaryApplication both need a real StudentId,
-// and Student's seeded ids are only known once InMemoryStudentRepository
-// has actually constructed them (they're randomly generated, not fixed).
-// So this can't happen inside builder.Services like the repositories
-// above — it has to run after the container is built, once, against the
-// real registered instances. CreateScope() mirrors how a real request
-// would resolve these services, even though nothing here is a request.
+// and Student's seeded ids are only known once the student rows actually
+// exist (they're randomly generated, not fixed). So this can't happen
+// inside builder.Services like the repositories above — it has to run
+// after the container is built, once, against the real registered
+// instances. CreateScope() mirrors how a real request would resolve these
+// services, even though nothing here is a request.
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
+
+    // Week 5: applies any pending migrations on startup, so a fresh clone
+    // of this repo just needs a running Postgres and a connection string —
+    // not a manual "remember to run dotnet ef database update" step.
+    var dbContext = services.GetRequiredService<MatricCompassDbContext>();
+    await dbContext.Database.MigrateAsync();
+
+    // InMemoryStudentRepository seeded Thandiwe and Sipho in its
+    // constructor — a real database doesn't construct itself with rows, so
+    // seeding now has to be an explicit, idempotent step: only insert if
+    // they're not already there, so restarting the app never duplicates them.
+    if (!await dbContext.Students.AnyAsync())
+    {
+        var thandiweSeed = new Student("Thandiwe Nkosi", "LRN-2026-00114");
+        thandiweSeed.EnrollSubject("MATH");
+        thandiweSeed.EnrollSubject("PHSC");
+        thandiweSeed.EnrollSubject("ENGL");
+
+        var siphoSeed = new Student("Sipho Dlamini", "LRN-2026-00287");
+        siphoSeed.EnrollSubject("MATL");
+        siphoSeed.EnrollSubject("LIFE");
+        siphoSeed.EnrollSubject("ENGL");
+        siphoSeed.EnrollSubject("BSTD");
+
+        dbContext.Students.AddRange(thandiweSeed, siphoSeed);
+        await dbContext.SaveChangesAsync();
+    }
+
     var studentRepository = services.GetRequiredService<IStudentRepository>();
     var tertiaryApplicationRepository = services.GetRequiredService<IRepository<TertiaryApplication>>();
     var bursaryApplicationRepository = services.GetRequiredService<IBursaryApplicationRepository>();
@@ -117,7 +168,8 @@ using (var scope = app.Services.CreateScope())
     var thandiwe = await studentRepository.GetByLrnAsync("LRN-2026-00114");
     var sipho = await studentRepository.GetByLrnAsync("LRN-2026-00287");
 
-    if (thandiwe is not null && sipho is not null)
+    if (thandiwe is not null && sipho is not null
+        && !(await tertiaryApplicationRepository.GetAllAsync()).Any())
     {
         await tertiaryApplicationRepository.AddAsync(
             new TertiaryApplication(thandiwe.Id, "University of Pretoria", "BSc Computer Science"));

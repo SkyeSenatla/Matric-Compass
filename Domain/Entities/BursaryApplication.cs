@@ -19,13 +19,20 @@ public class BursaryApplication : IEntity
 {
     private readonly List<string> _requiredDocuments;
 
-    public Guid Id { get; }
-    public Guid StudentId { get; }
-    public string Funder { get; }
+    public Guid Id { get; private set; }
+    public Guid StudentId { get; private set; }
+    public string Funder { get; private set; }
     public decimal Amount { get; private set; }
     public DateTime Deadline { get; private set; }
-    public BursaryApplicationStatus Status { get; }
+    public BursaryApplicationStatus Status { get; private set; }
     public IReadOnlyCollection<string> RequiredDocuments => _requiredDocuments.AsReadOnly();
+
+    // For EF Core only — see Student's private constructor.
+    private BursaryApplication()
+    {
+        Funder = null!;
+        _requiredDocuments = new List<string>();
+    }
 
     public BursaryApplication(
         Guid studentId, string funder, decimal amount, DateTime deadline, IEnumerable<string> requiredDocuments)

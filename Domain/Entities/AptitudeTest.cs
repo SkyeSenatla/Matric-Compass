@@ -7,12 +7,19 @@ namespace Domain.Entities;
 // DomainExceptionHandler already maps ArgumentException to 400.
 public class AptitudeTest : IEntity
 {
-    public Guid Id { get; }
-    public Guid StudentId { get; }
-    public string TestType { get; }
-    public DateTime DateTaken { get; }
-    public int Score { get; }
-    public IReadOnlyCollection<string> RecommendedCareers { get; }
+    public Guid Id { get; private set; }
+    public Guid StudentId { get; private set; }
+    public string TestType { get; private set; }
+    public DateTime DateTaken { get; private set; }
+    public int Score { get; private set; }
+    public IReadOnlyCollection<string> RecommendedCareers { get; private set; }
+
+    // For EF Core only — see Student's private constructor.
+    private AptitudeTest()
+    {
+        TestType = null!;
+        RecommendedCareers = null!;
+    }
 
     public AptitudeTest(Guid studentId, string testType, DateTime dateTaken, int score)
     {

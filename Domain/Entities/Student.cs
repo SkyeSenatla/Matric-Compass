@@ -11,12 +11,22 @@ namespace Domain.Entities;
 public class Student : IEntity
 {
     private readonly List<string> _subjectCodes = new();
-    public Guid Id { get; }
+    public Guid Id { get; private set; }
     public string FullName { get; private set; }
-    public string LearnerReferenceNumber { get; }
+    public string LearnerReferenceNumber { get; private set; }
     // Read-only view of internal state — callers cannot bypass EnrollSubject()
     // to mutate the list directly.
     public IReadOnlyCollection<string> SubjectCodes => _subjectCodes.AsReadOnly();
+
+    // For EF Core only: when it loads a row it needs a way to create the
+    // object without re-running the guard clauses (or minting a new Id),
+    // then fills the properties from the database. Private, so application
+    // code still has to go through the validating constructor below.
+    private Student()
+    {
+        FullName = null!;
+        LearnerReferenceNumber = null!;
+    }
 
     public Student(string fullName, string learnerReferenceNumber)
     {
