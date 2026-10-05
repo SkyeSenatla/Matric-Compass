@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Domain.Exceptions;
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 // The one catch site for every domain failure in the app. Day 2's
 // ProblemResponses required every action to call it by hand, action by
@@ -26,6 +28,17 @@ public class DomainExceptionHandler : IExceptionHandler
             NotFoundException => (StatusCodes.Status404NotFound, "Not Found"),
             ConflictException => (StatusCodes.Status409Conflict, "Conflict"),
             UnprocessableEntityException => (StatusCodes.Status422UnprocessableEntity, "Unprocessable Entity"),
+            // Week 5 Day 3: optimistic concurrency — the row changed since the
+            // client read it. MUST come before the DbUpdateException case
+            // below: DbUpdateConcurrencyException IS a DbUpdateException, and
+            // a switch takes the first pattern that matches.
+            DbUpdateConcurrencyException => (StatusCodes.Status409Conflict, "Conflict"),
+            // Week 5 Day 3: a database constraint caught what the C# check
+            // missed (usually two requests racing past it). 23505 is
+            // PostgreSQL's SQLSTATE for unique_violation — it's the same
+            // conflict ConflictException describes, so it gets the same 409.
+            DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } }
+                => (StatusCodes.Status409Conflict, "Conflict"),
             _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred")
         };
 

@@ -32,12 +32,21 @@ public class BursaryApplicationsController : ControllerBase
         _bursaryApplicationService = bursaryApplicationService;
     }
 
+    // Week 5 Day 3: no longer "return everything". One page at a time,
+    // filtered and sorted in the database, behind an opaque page token.
+    /// <summary>
+    /// Lists bursary applications, one page at a time.
+    /// </summary>
+    /// <param name="request">Optional pageSize (default 10, max 50), pageToken, studentId, status, and orderBy (deadline or amount).</param>
+    /// <response code="200">One page of results. An empty nextPageToken means there are no more.</response>
+    /// <response code="400">Negative pageSize, unknown orderBy/status, or a malformed or mismatched pageToken.</response>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<BursaryApplicationResponse>>> GetAllAsync()
+    [ProducesResponseType(typeof(PagedResponse<BursaryApplicationResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<PagedResponse<BursaryApplicationResponse>>> GetAllAsync(
+        [FromQuery] BursaryApplicationListRequest request)
     {
-        var applications = await _bursaryApplicationRepository.GetAllAsync();
-        return Ok(applications.Select(BursaryApplicationResponse.FromEntity));
-        // HTTP 200 OK
+        return Ok(await _bursaryApplicationService.ListAsync(request)); // HTTP 200 OK
     }
 
     /// <summary>
@@ -91,12 +100,14 @@ public class BursaryApplicationsController : ControllerBase
     /// Updates the amount and deadline of an existing bursary application.
     /// </summary>
     /// <param name="id">The bursary application's id.</param>
-    /// <param name="request">The new amount and deadline.</param>
+    /// <param name="request">The new amount and deadline, plus the Version this edit is based on.</param>
     /// <response code="204">The application was updated.</response>
     /// <response code="404">No bursary application exists with this id.</response>
+    /// <response code="409">The application changed since the Version you sent was read. GET it again and reapply your change.</response>
     [HttpPut("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> UpdateAsync(Guid id, BursaryApplicationUpdateRequest request)
     {
         // Week 5 Day 2: tracked, because UpdateDetails() has to be noticed by
@@ -106,7 +117,10 @@ public class BursaryApplicationsController : ControllerBase
 
         application.UpdateDetails(request.Amount, request.Deadline);
 
-        await _bursaryApplicationRepository.UpdateAsync(application);
+        // Week 5 Day 3: pass the client's Version through — a stale one makes
+        // SaveChanges throw DbUpdateConcurrencyException, which
+        // DomainExceptionHandler turns into a 409.
+        await _bursaryApplicationRepository.UpdateAsync(application, request.Version);
 
         return NoContent(); // HTTP 204 No Content
     }

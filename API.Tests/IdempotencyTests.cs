@@ -42,20 +42,39 @@ public class IdempotencyTests : IClassFixture<WebApplicationFactory<Program>>
     {
         // PUT is genuinely idempotent: same request, same effect, same status,
         // as many times as you send it — unlike DELETE above.
+        //
+        // Week 5 Day 3: every update now carries the Version it was based on,
+        // and after the first PUT that version is stale. The second PUT still
+        // gets 204, because it changes nothing: EF Core sends no UPDATE at all
+        // when no property changed, so there is no stale write to reject.
+        // (ConcurrencyTests covers a stale PUT that DOES change something: 409.)
+        //
+        // The deadline is a whole date on purpose. DateTime.UtcNow has
+        // 100-nanosecond precision; Postgres stores microseconds. Send UtcNow
+        // twice and the "same" deadline is really a different value from the
+        // stored one — a real change — so the second PUT becomes a stale write
+        // and gets 409. An identical payload has to be identical after the
+        // round trip, not just in the C# source.
+        var deadline = DateTime.UtcNow.Date.AddMonths(2);
         var students = await _client.GetFromJsonAsync<List<StudentResponse>>("/api/students");
         var created = await _client.PostAsJsonAsync("/api/bursary-applications", new
         {
-            studentId = students!.First().Id, funder = "MTN Bursary", amount = 1000m,
-            deadline = DateTime.UtcNow.AddMonths(2), requiredDocuments = Array.Empty<string>()
+            // Unique per run — see HappyPathTests' bursary update test.
+            studentId = students!.First().Id, funder = $"MTN Bursary {Guid.NewGuid():N}", amount = 1000m,
+            deadline, requiredDocuments = Array.Empty<string>()
         });
         var application = await created.Content.ReadFromJsonAsync<BursaryApplicationResponse>();
-        var payload = new { amount = 1500m, deadline = DateTime.UtcNow.AddMonths(2) };
+        var url = $"/api/bursary-applications/{application!.Id}";
+        var payload = new { amount = 1500m, deadline, version = application.Version };
 
-        var first = await _client.PutAsJsonAsync($"/api/bursary-applications/{application!.Id}", payload);
-        var second = await _client.PutAsJsonAsync($"/api/bursary-applications/{application.Id}", payload);
+        var first = await _client.PutAsJsonAsync(url, payload);
+        var second = await _client.PutAsJsonAsync(url, payload);
 
         Assert.Equal(HttpStatusCode.NoContent, first.StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, second.StatusCode);
+
+        var after = await _client.GetFromJsonAsync<BursaryApplicationResponse>(url);
+        Assert.Equal(1500m, after!.Amount);
     }
 
     [Theory]
@@ -100,7 +119,7 @@ public class IdempotencyTests : IClassFixture<WebApplicationFactory<Program>>
         var students = await _client.GetFromJsonAsync<List<StudentResponse>>("/api/students");
         var response = await _client.PostAsJsonAsync("/api/bursary-applications", new
         {
-            studentId = students!.Last().Id, funder = "Today Boundary Fund", amount = 500m,
+            studentId = students!.Last().Id, funder = $"Today Boundary Fund {Guid.NewGuid():N}", amount = 500m,
             deadline = DateTime.UtcNow.Date, requiredDocuments = Array.Empty<string>()
         });
 

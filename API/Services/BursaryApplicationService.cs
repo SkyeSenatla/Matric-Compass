@@ -1,5 +1,6 @@
 namespace API.Services;
 
+using API.Common;
 using API.Data;
 using API.Models;
 using Domain.Entities;
@@ -47,5 +48,52 @@ public class BursaryApplicationService : IBursaryApplicationService
         await _bursaryApplicationRepository.AddAsync(application);
 
         return BursaryApplicationResponse.FromEntity(application);
+    }
+
+    // Week 5 Day 3: the paging contract (AIP-158), enforced in ONE place.
+    public const int DefaultPageSize = 10;
+    public const int MaxPageSize = 50;
+
+    public async Task<PagedResponse<BursaryApplicationResponse>> ListAsync(BursaryApplicationListRequest request)
+    {
+        // Page size: optional; 0 or missing means "server decides"; too big is
+        // quietly reduced to the maximum, not rejected; negative is a 400.
+        if (request.PageSize is < 0)
+            throw new ArgumentException("pageSize must not be negative.", nameof(request.PageSize));
+        var pageSize = request.PageSize is null or 0 ? DefaultPageSize : Math.Min(request.PageSize.Value, MaxPageSize);
+
+        // Sort and filter come from an allow-list — anything else is a 400,
+        // never an arbitrary ORDER BY the database has no index for.
+        var orderBy = BursaryApplicationSort.Deadline;
+        if (request.OrderBy is not null
+            && !Enum.TryParse(request.OrderBy, ignoreCase: true, out orderBy))
+            throw new ArgumentException(
+                $"orderBy must be one of: {string.Join(", ", Enum.GetNames<BursaryApplicationSort>())}.",
+                nameof(request.OrderBy));
+
+        BursaryApplicationStatus? status = null;
+        if (request.Status is not null)
+        {
+            if (!Enum.TryParse<BursaryApplicationStatus>(request.Status, ignoreCase: true, out var parsed))
+                throw new ArgumentException(
+                    $"status must be one of: {string.Join(", ", Enum.GetNames<BursaryApplicationStatus>())}.",
+                    nameof(request.Status));
+            status = parsed;
+        }
+
+        var after = string.IsNullOrEmpty(request.PageToken)
+            ? null
+            : PageToken.Decode(request.PageToken, request.StudentId, status, orderBy);
+
+        // Ask for ONE more row than the page holds: if it comes back, there's
+        // a next page — no COUNT(*) needed to find that out.
+        var criteria = new BursaryApplicationListCriteria(request.StudentId, status, orderBy, after, pageSize + 1);
+        var rows = await _bursaryApplicationRepository.ListAsync(criteria);
+
+        var page = rows.Take(pageSize).ToList();
+        var nextPageToken = rows.Count > pageSize ? PageToken.Encode(criteria, page[^1]) : "";
+
+        return new PagedResponse<BursaryApplicationResponse>(
+            page.Select(BursaryApplicationResponse.FromEntity).ToList(), nextPageToken);
     }
 }

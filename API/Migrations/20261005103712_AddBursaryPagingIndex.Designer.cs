@@ -3,6 +3,7 @@ using System;
 using API.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace API.Migrations
 {
     [DbContext(typeof(MatricCompassDbContext))]
-    partial class MatricCompassDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261005103712_AddBursaryPagingIndex")]
+    partial class AddBursaryPagingIndex
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -68,31 +71,18 @@ namespace API.Migrations
                     b.Property<Guid>("StudentId")
                         .HasColumnType("uuid");
 
-                    b.Property<uint>("Version")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("StudentId", "Funder")
-                        .IsUnique()
-                        .HasDatabaseName("UX_BursaryApplications_StudentId_Funder_Active")
-                        .HasFilter("\"Status\" <> 4");
 
                     b.HasIndex("StudentId", "Deadline", "Id")
                         .HasDatabaseName("IX_BursaryApplications_StudentId_Deadline_Id");
 
-                    b.ToTable("BursaryApplications", t =>
-                        {
-                            t.HasCheckConstraint("CK_BursaryApplications_Amount_Positive", "\"Amount\" > 0");
-                        });
+                    b.ToTable("BursaryApplications");
                 });
 
             modelBuilder.Entity("Domain.Entities.CareerRecommendation", b =>
                 {
                     b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("AptitudeTestId")
@@ -162,6 +152,7 @@ namespace API.Migrations
             modelBuilder.Entity("Domain.Entities.Subject", b =>
                 {
                     b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<string>("Code")
@@ -179,9 +170,7 @@ namespace API.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("StudentId", "Code")
-                        .IsUnique()
-                        .HasDatabaseName("UX_Subjects_StudentId_Code");
+                    b.HasIndex("StudentId");
 
                     b.ToTable("Subjects");
                 });

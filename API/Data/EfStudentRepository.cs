@@ -17,17 +17,24 @@ public class EfStudentRepository : IStudentRepository
 
     // Eager loading: the shape of what's needed is decided here, in the
     // query, before anything runs — one round trip, not one per student.
+    //
+    // Week 5 Day 3: .Include(s => s.BursaryApplications) removed from both
+    // methods below. StudentResponse never returns bursary applications, so
+    // every one of them was fetched, materialized, and thrown away — measured
+    // at ~6.5 seconds for a 594-byte response once the table held 100,000
+    // rows. Include what the caller USES, not everything the entity HAS.
+    // (The navigation itself stays: queries like QueryBehaviorTests still
+    // traverse it.)
     public async Task<IEnumerable<Student>> GetAllAsync() =>
         await _dbContext.Students.AsNoTracking()
             .Include(s => s.Subjects)
-            .Include(s => s.BursaryApplications)
             .ToListAsync();
 
     public async Task<Student?> GetByIdAsync(Guid id, bool trackChanges = false)
     {
         var query = trackChanges
-            ? _dbContext.Students.Include(s => s.Subjects).Include(s => s.BursaryApplications)
-            : _dbContext.Students.AsNoTracking().Include(s => s.Subjects).Include(s => s.BursaryApplications);
+            ? _dbContext.Students.Include(s => s.Subjects)
+            : _dbContext.Students.AsNoTracking().Include(s => s.Subjects);
         return await query.FirstOrDefaultAsync(s => s.Id == id);
     }
 

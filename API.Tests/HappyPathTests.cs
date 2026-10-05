@@ -52,7 +52,10 @@ public class HappyPathTests : IClassFixture<WebApplicationFactory<Program>>
         var created = await _client.PostAsJsonAsync("/api/bursary-applications", new
         {
             studentId = students!.Last().Id,
-            funder = "Thuthuka Bursary Fund",
+            // Unique per run: bursary applications persist in Postgres since
+            // Week 5 Day 2, so a fixed funder name would hit the
+            // duplicate-active-application rule (409) on the second run.
+            funder = $"Thuthuka Bursary Fund {Guid.NewGuid():N}",
             amount = 1000m,
             deadline = DateTime.UtcNow.AddMonths(3),
             requiredDocuments = Array.Empty<string>()
@@ -61,7 +64,8 @@ public class HappyPathTests : IClassFixture<WebApplicationFactory<Program>>
 
         var updateResponse = await _client.PutAsJsonAsync(
             $"/api/bursary-applications/{application!.Id}",
-            new { amount = 2500m, deadline = DateTime.UtcNow.AddMonths(4) });
+            // Week 5 Day 3: an update must say which version it's based on.
+            new { amount = 2500m, deadline = DateTime.UtcNow.AddMonths(4), version = application.Version });
 
         Assert.Equal(HttpStatusCode.NoContent, updateResponse.StatusCode);
 

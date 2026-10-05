@@ -25,6 +25,14 @@ public class BursaryApplication : IEntity
     public decimal Amount { get; private set; }
     public DateTime Deadline { get; private set; }
     public BursaryApplicationStatus Status { get; private set; }
+
+    // Week 5 Day 3: an optimistic-concurrency token. Mapped to PostgreSQL's
+    // hidden xmin system column (see MatricCompassDbContext) — Postgres
+    // changes it on every write to the row, so nothing in this class ever
+    // sets it. It's here, on a domain entity, only so it can travel to the
+    // client and back; that's a deliberate trade-off, not an accident.
+    public uint Version { get; private set; }
+
     public IReadOnlyCollection<string> RequiredDocuments => _requiredDocuments.AsReadOnly();
 
     // For EF Core only — see Student's private constructor.

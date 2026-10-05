@@ -194,8 +194,13 @@ using (var scope = app.Services.CreateScope())
     // check is always meaningful), but BursaryApplication now persists —
     // reusing Tertiary's empty-check here would duplicate every bursary
     // application on every restart.
+    //
+    // Week 5 Day 3: was "!(await bursaryApplicationRepository.GetAllAsync()).Any()"
+    // — which downloaded EVERY bursary application into memory just to ask
+    // "is there at least one?". AnyAsync() asks Postgres instead, and gets
+    // back a single boolean (SELECT EXISTS ...).
     if (thandiwe is not null && sipho is not null
-        && !(await bursaryApplicationRepository.GetAllAsync()).Any())
+        && !await dbContext.BursaryApplications.AnyAsync())
     {
         await bursaryApplicationRepository.AddAsync(
             new BursaryApplication(thandiwe.Id, "NSFAS", 45000m, DateTime.UtcNow.AddMonths(2),
