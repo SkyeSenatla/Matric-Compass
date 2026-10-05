@@ -11,8 +11,13 @@ public record StudentResponse(
     Guid Id,
     string FullName,
     string LearnerReferenceNumber,
-    IReadOnlyCollection<string> SubjectCodes)
+    IReadOnlyCollection<SubjectResponse> Subjects)
 {
+    // Week 5 Day 2: maps each Subject to its own DTO rather than returning
+    // the entity — Subject never crosses the HTTP boundary either.
     public static StudentResponse FromEntity(Student student) =>
-        new(student.Id, student.FullName, student.LearnerReferenceNumber, student.SubjectCodes);
+        new(student.Id, student.FullName, student.LearnerReferenceNumber,
+            student.Subjects.Select(s => new SubjectResponse(s.Code, s.CurrentMark, s.TargetMark)).ToList());
 }
+
+public record SubjectResponse(string Code, decimal CurrentMark, decimal TargetMark);

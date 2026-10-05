@@ -3,6 +3,7 @@ using System;
 using API.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace API.Migrations
 {
     [DbContext(typeof(MatricCompassDbContext))]
-    partial class MatricCompassDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261001105835_RenameSubjectTable")]
+    partial class RenameSubjectTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -70,57 +73,7 @@ namespace API.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("StudentId");
-
                     b.ToTable("BursaryApplications");
-                });
-
-            modelBuilder.Entity("Domain.Entities.CareerRecommendation", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("AptitudeTestId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("CareerName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("Rank")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AptitudeTestId");
-
-                    b.ToTable("CareerRecommendations");
-                });
-
-            modelBuilder.Entity("Domain.Entities.Guardian", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ContactNumber")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("FullName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("StudentId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StudentId")
-                        .IsUnique();
-
-                    b.ToTable("Guardians");
                 });
 
             modelBuilder.Entity("Domain.Entities.Student", b =>
@@ -196,43 +149,18 @@ namespace API.Migrations
                     b.ToTable("TertiaryApplications");
                 });
 
-            modelBuilder.Entity("Domain.Entities.BursaryApplication", b =>
-                {
-                    b.HasOne("Domain.Entities.Student", null)
-                        .WithMany("BursaryApplications")
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Domain.Entities.CareerRecommendation", b =>
-                {
-                    b.HasOne("Domain.Entities.AptitudeTest", null)
-                        .WithMany("Recommendations")
-                        .HasForeignKey("AptitudeTestId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("Domain.Entities.Subject", b =>
                 {
                     b.HasOne("Domain.Entities.Student", null)
-                        .WithMany("Subjects")
+                        .WithMany("SubjectCodes")
                         .HasForeignKey("StudentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("Domain.Entities.AptitudeTest", b =>
-                {
-                    b.Navigation("Recommendations");
                 });
 
             modelBuilder.Entity("Domain.Entities.Student", b =>
                 {
-                    b.Navigation("BursaryApplications");
-
-                    b.Navigation("Subjects");
+                    b.Navigation("SubjectCodes");
                 });
 #pragma warning restore 612, 618
         }

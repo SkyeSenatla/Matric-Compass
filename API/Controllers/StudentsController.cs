@@ -127,7 +127,10 @@ public class StudentsController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateStudentAsync(Guid id, StudentUpdateRequest request)
     {
-        var student = await _studentRepository.GetByIdAsync(id)
+        // Week 5 Day 2: one of only two call sites in the app that need a
+        // tracked entity — UpdateAsync relies on the change tracker to
+        // notice FullName changed. Every read-only caller takes the default.
+        var student = await _studentRepository.GetByIdAsync(id, trackChanges: true)
             ?? throw new NotFoundException($"Student {id} was not found.");
 
         // Same discipline as creation: the entity validates itself via

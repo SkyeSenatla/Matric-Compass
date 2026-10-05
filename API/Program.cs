@@ -5,6 +5,7 @@ using API.Services;
 using Domain.Entities;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 // ════════════════════════════════════════════════════
 // PHASE 1 — BUILDER: Register services into the
@@ -56,12 +57,19 @@ builder.Services.AddProblemDetails(); // fallback shape for anything the handler
 // automatic, and it's the first time this app has had to think about a
 // network call that can fail for reasons that have nothing to do with the
 // request itself (a dropped connection, a Postgres restart mid-query).
+//
+// Week 5 Day 2: LogTo() prints every SQL command EF Core sends, one line
+// each — this is what makes the N+1 demo (API.Tests/QueryBehaviorTests.cs)
+// countable on screen instead of just described.
 builder.Services.AddDbContext<MatricCompassDbContext>(options =>
+{
     options.UseNpgsql(connectionString, npgsqlOptions =>
         npgsqlOptions.EnableRetryOnFailure(
             maxRetryCount: 3,
             maxRetryDelay: TimeSpan.FromSeconds(5),
-            errorCodesToAdd: null)));
+            errorCodesToAdd: null));
+    options.LogTo(Console.WriteLine, LogLevel.Information, DbContextLoggerOptions.SingleLine);
+});
 
 // Register the repository abstraction: any controller that asks for
 // IStudentRepository in its constructor receives this instance automatically.
@@ -71,8 +79,8 @@ builder.Services.AddDbContext<MatricCompassDbContext>(options =>
 // deck warned about. A DbContext must not survive past one request, and
 // EfStudentRepository holds one, so nothing that depends on it can be
 // Singleton anymore without recreating that exact bug. Students now live in
-// the real database (see MatricCompassDbContext); TertiaryApplication,
-// BursaryApplication, and AptitudeTest stay in-memory a while longer.
+// the real database (see MatricCompassDbContext); TertiaryApplication and
+// AptitudeTest stay in-memory a while longer.
 builder.Services.AddScoped<IStudentRepository, EfStudentRepository>();
 
 // Day 1: TertiaryApplication needs nothing beyond the generic contract
@@ -84,7 +92,11 @@ builder.Services.AddSingleton<IRepository<TertiaryApplication>, InMemoryReposito
 // Day 2: BursaryApplication gets the entity-specific interface Student
 // already has, for the same reason — GetByStudentIdAsync is the one
 // lookup CreateAsync's duplicate-application rule needs beyond generic CRUD.
-builder.Services.AddSingleton<IBursaryApplicationRepository, InMemoryBursaryApplicationRepository>();
+//
+// Week 5 Day 2: swapped to EF Core, Scoped for the same reason as
+// EfStudentRepository above.
+// Was: builder.Services.AddSingleton<IBursaryApplicationRepository, InMemoryBursaryApplicationRepository>();
+builder.Services.AddScoped<IBursaryApplicationRepository, EfBursaryApplicationRepository>();
 
 // Day 3: AptitudeTest has no entity-specific query beyond get-by-id, so it
 // closes over the generic IRepository<T>/InMemoryRepository<T> directly —
@@ -147,15 +159,15 @@ using (var scope = app.Services.CreateScope())
     if (!await dbContext.Students.AnyAsync())
     {
         var thandiweSeed = new Student("Thandiwe Nkosi", "LRN-2026-00114");
-        thandiweSeed.EnrollSubject("MATH");
-        thandiweSeed.EnrollSubject("PHSC");
-        thandiweSeed.EnrollSubject("ENGL");
+        thandiweSeed.EnrollSubject("MATH", 80);
+        thandiweSeed.EnrollSubject("PHSC", 90);
+        thandiweSeed.EnrollSubject("ENGL", 81);
 
         var siphoSeed = new Student("Sipho Dlamini", "LRN-2026-00287");
-        siphoSeed.EnrollSubject("MATL");
-        siphoSeed.EnrollSubject("LIFE");
-        siphoSeed.EnrollSubject("ENGL");
-        siphoSeed.EnrollSubject("BSTD");
+        siphoSeed.EnrollSubject("MATL", 76);
+        siphoSeed.EnrollSubject("LIFE", 56);
+        siphoSeed.EnrollSubject("ENGL", 88);
+        siphoSeed.EnrollSubject("BSTD", 32);
 
         dbContext.Students.AddRange(thandiweSeed, siphoSeed);
         await dbContext.SaveChangesAsync();
@@ -175,7 +187,16 @@ using (var scope = app.Services.CreateScope())
             new TertiaryApplication(thandiwe.Id, "University of Pretoria", "BSc Computer Science"));
         await tertiaryApplicationRepository.AddAsync(
             new TertiaryApplication(sipho.Id, "University of Johannesburg", "BCom Accounting"));
+    }
 
+    // Week 5 Day 2: guarded independently of the tertiary seed above.
+    // TertiaryApplication is still in-memory (empty on every restart, so its
+    // check is always meaningful), but BursaryApplication now persists —
+    // reusing Tertiary's empty-check here would duplicate every bursary
+    // application on every restart.
+    if (thandiwe is not null && sipho is not null
+        && !(await bursaryApplicationRepository.GetAllAsync()).Any())
+    {
         await bursaryApplicationRepository.AddAsync(
             new BursaryApplication(thandiwe.Id, "NSFAS", 45000m, DateTime.UtcNow.AddMonths(2),
                 new[] { "Certified ID Copy", "Proof of Household Income" }));

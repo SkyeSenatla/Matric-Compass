@@ -27,7 +27,11 @@ public class InMemoryRepository<T> : IRepository<T> where T : class, IEntity
     public Task<IEnumerable<T>> GetAllAsync() =>
         Task.FromResult(_items.Values.AsEnumerable());
 
-    public Task<T?> GetByIdAsync(Guid id) =>
+    public Task<T?> GetByIdAsync(Guid id, bool trackChanges = false) =>
+        // "trackChanges" is an EF Core concept with nothing to mean here —
+        // accepted only so this class keeps satisfying the same interface
+        // EfStudentRepository and EfBursaryApplicationRepository do. A leaky
+        // abstraction, on purpose, named as one.
         Task.FromResult(_items.TryGetValue(id, out var item) ? item : null);
 
     public Task<T> AddAsync(T entity)

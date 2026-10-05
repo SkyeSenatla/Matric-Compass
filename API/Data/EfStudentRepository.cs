@@ -15,11 +15,21 @@ public class EfStudentRepository : IStudentRepository
         _dbContext = dbContext;
     }
 
+    // Eager loading: the shape of what's needed is decided here, in the
+    // query, before anything runs — one round trip, not one per student.
     public async Task<IEnumerable<Student>> GetAllAsync() =>
-        await _dbContext.Students.ToListAsync();
+        await _dbContext.Students.AsNoTracking()
+            .Include(s => s.Subjects)
+            .Include(s => s.BursaryApplications)
+            .ToListAsync();
 
-    public async Task<Student?> GetByIdAsync(Guid id) =>
-        await _dbContext.Students.FirstOrDefaultAsync(s => s.Id == id);
+    public async Task<Student?> GetByIdAsync(Guid id, bool trackChanges = false)
+    {
+        var query = trackChanges
+            ? _dbContext.Students.Include(s => s.Subjects).Include(s => s.BursaryApplications)
+            : _dbContext.Students.AsNoTracking().Include(s => s.Subjects).Include(s => s.BursaryApplications);
+        return await query.FirstOrDefaultAsync(s => s.Id == id);
+    }
 
     public async Task<Student?> GetByLrnAsync(string learnerReferenceNumber) =>
         await _dbContext.Students.FirstOrDefaultAsync(s => s.LearnerReferenceNumber == learnerReferenceNumber);

@@ -9,6 +9,10 @@ using Domain.Entities;
 // point of coding against IStudentRepository, not this class, is that it
 // can be swapped for an EF Core + PostgreSQL implementation in Week 5
 // without the controller or service changing at all.
+//
+// Week 5: the app no longer registers this (EfStudentRepository replaced
+// it), but it's not dead code — StudentServiceTests still uses it as a
+// fast, database-free test double for IStudentRepository.
 public class InMemoryStudentRepository : InMemoryRepository<Student>, IStudentRepository
 {
     public InMemoryStudentRepository() : base(BuildSeedData())
@@ -27,15 +31,15 @@ public class InMemoryStudentRepository : InMemoryRepository<Student>, IStudentRe
     private static List<Student> BuildSeedData()
     {
         var thandiwe = new Student("Thandiwe Nkosi", "LRN-2026-00114");
-        thandiwe.EnrollSubject("MATH");
-        thandiwe.EnrollSubject("PHSC");
-        thandiwe.EnrollSubject("ENGL");
+        thandiwe.EnrollSubject("MATH", 90);
+        thandiwe.EnrollSubject("PHSC", 30);
+        thandiwe.EnrollSubject("ENGL", 30);
 
         var sipho = new Student("Sipho Dlamini", "LRN-2026-00287");
-        sipho.EnrollSubject("MATL"); // Mathematical Literacy
-        sipho.EnrollSubject("LIFE");
-        sipho.EnrollSubject("ENGL");
-        sipho.EnrollSubject("BSTD"); // Business Studies
+        sipho.EnrollSubject("MATL", 40); // Mathematical Literacy
+        sipho.EnrollSubject("LIFE",56 );
+        sipho.EnrollSubject("ENGL", 60);
+        sipho.EnrollSubject("BSTD", 44); // Business Studies
 
         return new List<Student> { thandiwe, sipho };
     }

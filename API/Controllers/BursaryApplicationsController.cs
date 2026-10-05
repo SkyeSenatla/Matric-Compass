@@ -99,7 +99,9 @@ public class BursaryApplicationsController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateAsync(Guid id, BursaryApplicationUpdateRequest request)
     {
-        var application = await _bursaryApplicationRepository.GetByIdAsync(id)
+        // Week 5 Day 2: tracked, because UpdateDetails() has to be noticed by
+        // SaveChangesAsync() — see StudentsController.UpdateStudentAsync.
+        var application = await _bursaryApplicationRepository.GetByIdAsync(id, trackChanges: true)
             ?? throw new NotFoundException($"Bursary application {id} was not found.");
 
         application.UpdateDetails(request.Amount, request.Deadline);

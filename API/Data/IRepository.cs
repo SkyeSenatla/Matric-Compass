@@ -11,7 +11,10 @@ using Domain.Entities;
 public interface IRepository<T> where T : class, IEntity
 {
     Task<IEnumerable<T>> GetAllAsync();
-    Task<T?> GetByIdAsync(Guid id);
+    // Week 5 Day 2: trackChanges defaults to false — every read-only caller
+    // gets the cheaper AsNoTracking() path for free, and the call sites that
+    // are about to mutate and save say so explicitly.
+    Task<T?> GetByIdAsync(Guid id, bool trackChanges = false);
     Task<T> AddAsync(T entity);
     Task<bool> UpdateAsync(T entity);
     Task<bool> DeleteAsync(Guid id);
