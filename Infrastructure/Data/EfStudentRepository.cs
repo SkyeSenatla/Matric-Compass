@@ -1,7 +1,8 @@
-namespace API.Data;
+namespace Infrastructure.Data;
 
 using Microsoft.EntityFrameworkCore;
 using Domain.Entities;
+using Domain.Repositories;
 
 // The real implementation the comment in InMemoryStudentRepository has
 // been promising since Day 1. IStudentRepository, StudentService, and

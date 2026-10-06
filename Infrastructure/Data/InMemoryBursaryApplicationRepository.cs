@@ -1,6 +1,7 @@
-namespace API.Data;
+namespace Infrastructure.Data;
 
 using Domain.Entities;
+using Domain.Repositories;
 
 // Week 5 Day 2: the app no longer registers this (EfBursaryApplicationRepository
 // replaced it), but it stays — BursaryApplicationServiceTests uses it as a

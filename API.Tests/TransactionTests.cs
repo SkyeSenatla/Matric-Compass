@@ -3,7 +3,7 @@ namespace API.Tests;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using API.Data;
+using Infrastructure.Data;
 using Domain.Entities;
 
 // Demo 7: SaveChangesAsync() already wraps itself in an implicit

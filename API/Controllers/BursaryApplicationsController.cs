@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using FluentValidation;
 using API.Models;
-using API.Data;
+using Domain.Repositories;
 using API.Services;
 using Domain.Exceptions;
 

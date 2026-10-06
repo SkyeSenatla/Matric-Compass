@@ -1,4 +1,4 @@
-namespace API.Data;
+namespace Infrastructure.Data;
 
 using Microsoft.EntityFrameworkCore;
 using Domain.Entities;

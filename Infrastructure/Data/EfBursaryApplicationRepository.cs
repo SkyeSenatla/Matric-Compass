@@ -1,7 +1,8 @@
-namespace API.Data;
+namespace Infrastructure.Data;
 
 using Microsoft.EntityFrameworkCore;
 using Domain.Entities;
+using Domain.Repositories;
 
 // Week 5 Day 2: Day 1's EfStudentRepository swap, repeated for
 // BursaryApplication — the N+1 demo needs "students with their bursary

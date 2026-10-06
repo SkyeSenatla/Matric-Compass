@@ -2,7 +2,7 @@
 
 #nullable disable
 
-namespace API.Migrations
+namespace Infrastructure.Migrations
 {
     /// <inheritdoc />
     public partial class AddBursaryPagingIndex : Migration

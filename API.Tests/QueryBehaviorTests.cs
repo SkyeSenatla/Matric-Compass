@@ -3,7 +3,7 @@ namespace API.Tests;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using API.Data;
+using Infrastructure.Data;
 
 // Week 5 Day 2, Demo 6: an explicitly temporary demonstration, not a
 // regression test. Run with:

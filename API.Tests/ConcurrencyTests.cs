@@ -5,7 +5,7 @@ using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using API.Data;
+using Infrastructure.Data;
 using API.Models;
 
 // Week 5 Day 3: proves a conflicting write is REJECTED, not silently applied.

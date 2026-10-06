@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using API.Models;
-using API.Data;
+using Domain.Repositories;
 using Domain.Entities;
 using Domain.Exceptions;
 

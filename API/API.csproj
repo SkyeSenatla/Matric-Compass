@@ -13,16 +13,37 @@
     <PackageReference Include="FluentValidation" Version="12.1.1" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />
+    <!-- Pins the version Infrastructure already brings in transitively —
+         without an explicit reference here, Microsoft.AspNetCore.OpenApi's
+         own older transitive EF Core reference wins version unification
+         instead, and the build fails outright (CS1705). API still never
+         calls an EF Core API directly; this line exists for the resolver,
+         not for any code in this project. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
+    <!-- dotnet ef inspects the STARTUP project for this package directly —
+         it does not follow a ProjectReference to find it on Infrastructure,
+         because Design is marked PrivateAssets="all" there (a build-time
+         tool has no business flowing into anyone's published output).
+         Needed on both projects for exactly that reason, not a mistake. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.17.6" />
   </ItemGroup>
 
+  <!-- Week 5 Day 4: API no longer references EF Core or Npgsql packages
+       directly — it references Infrastructure, which references Domain.
+       Program.cs can still call AddDbContext/UseNpgsql because those
+       packages arrive transitively through the project reference below;
+       nothing in API/Controllers or API/Services ever imports EF Core
+       itself. That's the actual, enforced version of "the domain (and the
+       app built on it) shouldn't know EF Core exists" — not a comment, a
+       project boundary MSBuild checks for you. -->
   <ItemGroup>
     <ProjectReference Include="..\Domain\Domain.csproj" />
+    <ProjectReference Include="..\Infrastructure\Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

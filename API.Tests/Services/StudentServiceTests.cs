@@ -1,6 +1,6 @@
 namespace API.Tests.Services;
 
-using API.Data;
+using Infrastructure.Data;
 using API.Models;
 using API.Services;
 using Domain.Exceptions;

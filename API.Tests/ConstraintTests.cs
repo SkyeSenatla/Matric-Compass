@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using API.Common;
-using API.Data;
+using Infrastructure.Data;
 using Domain.Entities;
 
 // Week 5 Day 3: proves each database constraint holds ON ITS OWN — every

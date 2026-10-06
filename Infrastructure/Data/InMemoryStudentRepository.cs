@@ -1,6 +1,7 @@
-namespace API.Data;
+namespace Infrastructure.Data;
 
 using Domain.Entities;
+using Domain.Repositories;
 
 // Implements IStudentRepository by inheriting the generic in-memory
 // behavior (GetAllAsync, GetByIdAsync, AddAsync, UpdateAsync, DeleteAsync)

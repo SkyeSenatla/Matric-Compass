@@ -1,6 +1,7 @@
-namespace API.Data;
+namespace Infrastructure.Data;
 
 using Domain.Entities;
+using Domain.Repositories;
 
 // One in-memory list per entity type. Every method here mirrors what
 // InMemoryStudentRepository already did by hand on Day 1 — writing the

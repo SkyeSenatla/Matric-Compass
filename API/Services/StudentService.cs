@@ -1,6 +1,6 @@
 namespace API.Services;
 
-using API.Data;
+using Domain.Repositories;
 using API.Models;
 using Domain.Entities;
 using Domain.Exceptions;

@@ -1,8 +1,9 @@
 using Scalar.AspNetCore;
 using API.Common;
-using API.Data;
 using API.Services;
 using Domain.Entities;
+using Domain.Repositories;
+using Infrastructure.Data;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;

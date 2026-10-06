@@ -1,7 +1,7 @@
 namespace API.Common;
 
 using System.Text.Json;
-using API.Data;
+using Domain.Repositories;
 using Domain.Entities;
 
 // AIP-158: the page token is OPAQUE. The client receives it, stores it, and

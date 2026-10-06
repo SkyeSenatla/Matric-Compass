@@ -1,4 +1,4 @@
-namespace API.Data;
+namespace Domain.Repositories;
 
 using Domain.Entities;
 
