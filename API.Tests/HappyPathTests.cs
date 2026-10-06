@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using API.Tests.TestSupport;
 using API.Models;
 
 namespace API.Tests;
@@ -8,11 +9,12 @@ namespace API.Tests;
 // Demo 4: ErrorShapeTests only ever proves the API fails correctly. These
 // tests prove the success shape holds through the full pipeline — model
 // binding, validation, the service, the repository, serialization back out.
-public class HappyPathTests : IClassFixture<WebApplicationFactory<Program>>
+[Collection("Postgres collection")]
+public class HappyPathTests
 {
     private readonly HttpClient _client;
 
-    public HappyPathTests(WebApplicationFactory<Program> factory) => _client = factory.CreateClient();
+    public HappyPathTests(PostgresApiFactory factory) => _client = factory.CreateClient();
 
     [Fact]
     public async Task GetStudents_returns_the_seeded_students()

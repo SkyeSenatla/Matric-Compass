@@ -3,15 +3,17 @@ namespace API.Tests;
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using API.Tests.TestSupport;
 using API.Models;
 
 // Week 5 Day 3: the paging contract, tested as a contract — what a client
 // can rely on, not how the repository happens to implement it.
-public class PaginationTests : IClassFixture<WebApplicationFactory<Program>>
+[Collection("Postgres collection")]
+public class PaginationTests
 {
     private readonly HttpClient _client;
 
-    public PaginationTests(WebApplicationFactory<Program> factory) => _client = factory.CreateClient();
+    public PaginationTests(PostgresApiFactory factory) => _client = factory.CreateClient();
 
     [Fact]
     public async Task Walking_every_page_returns_each_application_exactly_once_then_an_empty_token()

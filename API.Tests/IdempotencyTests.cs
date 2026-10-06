@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using API.Tests.TestSupport;
 using API.Models;
 
 namespace API.Tests;
@@ -11,11 +12,12 @@ namespace API.Tests;
 // boundary tests below exist because >= 85, InclusiveBetween(0, 100), and
 // < DateTime.UtcNow.Date are exactly the kind of off-by-one-prone conditions
 // that read correctly and still hide a < where a <= belongs.
-public class IdempotencyTests : IClassFixture<WebApplicationFactory<Program>>
+[Collection("Postgres collection")]
+public class IdempotencyTests
 {
     private readonly HttpClient _client;
 
-    public IdempotencyTests(WebApplicationFactory<Program> factory) => _client = factory.CreateClient();
+    public IdempotencyTests(PostgresApiFactory factory) => _client = factory.CreateClient();
 
     [Fact]
     public async Task Deleting_the_same_student_twice_is_204_then_404_but_idempotent_in_effect()

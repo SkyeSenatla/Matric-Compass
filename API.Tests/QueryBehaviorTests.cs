@@ -1,6 +1,7 @@
 namespace API.Tests;
 
 using Microsoft.AspNetCore.Mvc.Testing;
+using API.Tests.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Infrastructure.Data;
@@ -10,11 +11,12 @@ using Infrastructure.Data;
 //   dotnet test --filter QueryBehaviorTests -l "console;verbosity=detailed"
 // and count the "Executed DbCommand" lines under each banner — Program.cs's
 // LogTo() prints one per SQL command.
-public class QueryBehaviorTests : IClassFixture<WebApplicationFactory<Program>>
+[Collection("Postgres collection")]
+public class QueryBehaviorTests
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly PostgresApiFactory _factory;
 
-    public QueryBehaviorTests(WebApplicationFactory<Program> factory) => _factory = factory;
+    public QueryBehaviorTests(PostgresApiFactory factory) => _factory = factory;
 
     [Fact]
     public async Task Naive_loop_triggers_one_query_per_student()

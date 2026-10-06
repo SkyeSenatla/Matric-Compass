@@ -1,6 +1,7 @@
 namespace API.Tests;
 
 using Microsoft.AspNetCore.Mvc.Testing;
+using API.Tests.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Infrastructure.Data;
@@ -10,11 +11,12 @@ using Domain.Entities;
 // transaction — this proves the explicit BeginTransactionAsync()/
 // RollbackAsync() mechanism actually works, by deliberately breaking a
 // transaction and watching nothing persist.
-public class TransactionTests : IClassFixture<WebApplicationFactory<Program>>
+[Collection("Postgres collection")]
+public class TransactionTests
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly PostgresApiFactory _factory;
 
-    public TransactionTests(WebApplicationFactory<Program> factory) => _factory = factory;
+    public TransactionTests(PostgresApiFactory factory) => _factory = factory;
 
     [Fact]
     public async Task A_rolled_back_transaction_leaves_no_trace()

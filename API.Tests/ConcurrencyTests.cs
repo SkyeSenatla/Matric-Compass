@@ -3,6 +3,7 @@ namespace API.Tests;
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using API.Tests.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Infrastructure.Data;
@@ -12,12 +13,13 @@ using API.Models;
 // No Thread.Sleep, no Task.Delay, no real parallelism — concurrency is about
 // the ORDER two writes interleave in, and a test can just perform them in
 // the bad order on purpose. That makes it deterministic.
-public class ConcurrencyTests : IClassFixture<WebApplicationFactory<Program>>
+[Collection("Postgres collection")]
+public class ConcurrencyTests
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly PostgresApiFactory _factory;
     private readonly HttpClient _client;
 
-    public ConcurrencyTests(WebApplicationFactory<Program> factory)
+    public ConcurrencyTests(PostgresApiFactory factory)
     {
         _factory = factory;
         _client = factory.CreateClient();

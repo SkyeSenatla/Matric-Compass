@@ -4,6 +4,7 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
+using API.Tests.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -16,11 +17,12 @@ using Domain.Entities;
 // test below deliberately goes around the C# check that normally stops the
 // duplicate first, because the whole point of a constraint is the case
 // where that check didn't run, or ran and was wrong.
-public class ConstraintTests : IClassFixture<WebApplicationFactory<Program>>
+[Collection("Postgres collection")]
+public class ConstraintTests
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly PostgresApiFactory _factory;
 
-    public ConstraintTests(WebApplicationFactory<Program> factory) => _factory = factory;
+    public ConstraintTests(PostgresApiFactory factory) => _factory = factory;
 
     [Fact]
     public async Task Second_active_application_with_the_same_funder_is_rejected_by_the_database()

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using API.Tests.TestSupport;
 
 namespace API.Tests;
 
@@ -10,11 +11,12 @@ namespace API.Tests;
 // DomainExceptionHandler's switch (API/Common/DomainExceptionHandler.cs) —
 // filling them in was a matter of calling the same endpoints exercised
 // live in Demo 0, not new logic to design.
-public class ErrorShapeTests : IClassFixture<WebApplicationFactory<Program>>
+[Collection("Postgres collection")]
+public class ErrorShapeTests
 {
     private readonly HttpClient _client;
 
-    public ErrorShapeTests(WebApplicationFactory<Program> factory)
+    public ErrorShapeTests(PostgresApiFactory factory)
     {
         _client = factory.CreateClient();
     }
