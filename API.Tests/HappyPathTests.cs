@@ -14,7 +14,7 @@ public class HappyPathTests
 {
     private readonly HttpClient _client;
 
-    public HappyPathTests(PostgresApiFactory factory) => _client = factory.CreateClient();
+    public HappyPathTests(PostgresApiFactory factory) => _client = factory.CreateAdminClient();
 
     [Fact]
     public async Task GetStudents_returns_the_seeded_students()

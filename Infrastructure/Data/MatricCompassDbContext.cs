@@ -16,6 +16,8 @@ public class MatricCompassDbContext : DbContext
     public DbSet<BursaryApplication> BursaryApplications => Set<BursaryApplication>();
     public DbSet<AptitudeTest> AptitudeTests => Set<AptitudeTest>();
     public DbSet<CareerRecommendation> CareerRecommendations => Set<CareerRecommendation>();
+    public DbSet<AppUser> Users => Set<AppUser>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -119,5 +121,39 @@ public class MatricCompassDbContext : DbContext
         modelBuilder.Entity<BursaryApplication>()
             .Property(b => b.Version)
             .IsRowVersion();
+
+        // -- Week 6 Day 1: who can sign in, and the tokens they hold ---------
+        modelBuilder.Entity<AppUser>(user =>
+        {
+            // One login per email address — enforced by the database, not
+            // just by a lookup before insert (Week 5 Day 3).
+            user.HasIndex(u => u.Email).IsUnique();
+            user.Property(u => u.Email).HasMaxLength(256);
+            user.Property(u => u.Role).HasMaxLength(32);
+
+            // A learner's login points at their student record. Deleting the
+            // student deletes the login with it.
+            user.HasOne<Student>()
+                .WithMany()
+                .HasForeignKey(u => u.StudentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RefreshToken>(token =>
+        {
+            // Lookups are by hash, so the hash is the index. Unique: two
+            // tokens with the same hash would mean a broken random generator.
+            token.HasIndex(t => t.TokenHash).IsUnique();
+            token.HasIndex(t => t.FamilyId);
+
+            token.HasOne<AppUser>()
+                .WithMany()
+                .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Two browser tabs refreshing the same token at the same moment:
+            // only one rotation may win (Week 5 Day 3's xmin, reused).
+            token.Property(t => t.Version).IsRowVersion();
+        });
     }
 }

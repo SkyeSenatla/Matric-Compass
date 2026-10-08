@@ -8,9 +8,9 @@ Built incrementally as a teaching project: each week/day adds one deliberate con
 
 - **.NET 10** / ASP.NET Core Web API (controllers, not minimal APIs — see `Program.cs` for why)
 - **FluentValidation** for request-shape validation
-- **EF Core** + **PostgreSQL** (Npgsql) for `Student` persistence; everything else is still in-memory — see [Current limitations](#current-limitations)
+- **EF Core** + **PostgreSQL** (Npgsql) for `Student` and `BursaryApplication` persistence; `TertiaryApplication` and `AptitudeTest` are still in-memory — see [Current limitations](#current-limitations)
 - **Microsoft.AspNetCore.OpenApi** + **Scalar** for API documentation (`/scalar/v1`)
-- **xUnit** + `Microsoft.AspNetCore.Mvc.Testing` (`WebApplicationFactory`) for tests
+- **xUnit** + `Microsoft.AspNetCore.Mvc.Testing` (`WebApplicationFactory`) for tests, against a **Testcontainers**-provisioned PostgreSQL instance — no manually-started database required to run the suite
 
 ## Project structure
 
@@ -123,20 +123,24 @@ Always read a generated migration before running it against a shared database �
 dotnet test
 ```
 
+That's the whole prerequisite — no manual `docker run` for Postgres, no connection string to set. `API.Tests/TestSupport/PostgresApiFactory.cs` starts a disposable PostgreSQL container (via Testcontainers) once per test run, points the app at it, and tears it down when the run finishes. The only requirement is a running Docker daemon.
+
 Tests are split by what they're proving, not just by folder:
 
-- **Unit tests** (`API.Tests/Services/`) — a service class and a real in-memory repository, no HTTP, no DI container. Fast, and pinned to one business rule each.
-- **Integration tests** (`ErrorShapeTests`, `HappyPathTests`, `IdempotencyTests`) — boot the real app via `WebApplicationFactory<Program>` and drive it over HTTP, proving the full pipeline (binding → validation → service → repository → serialization) for both failure and success paths, plus idempotency and validation-boundary edge cases.
+- **Unit tests** (`API.Tests/Services/`) — a service class and a real in-memory repository, no HTTP, no DI container, no database at all. Fast, and pinned to one business rule each.
+- **Integration tests** (`ErrorShapeTests`, `HappyPathTests`, `IdempotencyTests`, `PaginationTests`, `QueryBehaviorTests`, `ConstraintTests`, `ConcurrencyTests`, `TransactionTests`) — all share one `[Collection("Postgres collection")]` fixture, booting the real app once via `PostgresApiFactory` and driving it over HTTP, proving the full pipeline (binding → validation → service → repository → serialization) for failure paths, success paths, pagination, database constraints, optimistic concurrency, and idempotency.
 
-A refactor that changes *how* something works (e.g. the in-memory repositories' internal storage) without changing *what it promises* should not require any test above to change. If it does, that test was coupled to an implementation detail, not a behavior.
+A refactor that changes *how* something works (e.g. the in-memory repositories' internal storage, or swapping the dev Postgres container for a disposable one) without changing *what it promises* should not require any test above to change. If it does, that test was coupled to an implementation detail, not a behavior.
 
 ## Current limitations
 
 This is a teaching snapshot, not a finished product. Known gaps, left in deliberately as the next round of work:
 
-- **Only `Student` is backed by a real database.** `TertiaryApplication`, `BursaryApplication`, and `AptitudeTest` are still `Dictionary<Guid, T>` in-memory repositories (`API/Data/InMemoryRepository.cs`) — restarting the app resets them. `EfStudentRepository` is the template the same swap gets applied to for the other three.
+- **Only `Student` and `BursaryApplication` are backed by a real database.** `TertiaryApplication` and `AptitudeTest` are still `Dictionary<Guid, T>` in-memory repositories (`Infrastructure/Data/InMemoryRepository.cs`) — restarting the app resets them. `EfStudentRepository`/`EfBursaryApplicationRepository` are the template the same swap gets applied to for the other two.
 - **`Student.SubjectCodes`, `BursaryApplication.RequiredDocuments`, and `AptitudeTest.RecommendedCareers` are not persisted.** They're computed, read-only wrapper properties over a private field, which EF Core can't map — `MatricCompassDbContext.OnModelCreating` explicitly `Ignore()`s all three for now. Concretely: seeded subjects currently do **not** survive a read back from Postgres (`GET /api/students` shows `subjectCodes: []`). The real fix is replacing `SubjectCodes` with a proper `Subject` entity and a one-to-many relationship, not a workaround to make the existing shape persist.
 - **No authentication/authorization.** Every endpoint is open.
 - **`TertiaryApplication` is read-only** — no create/update/delete endpoint yet, and no service layer for advancing an application through its status pipeline (`Researching` → ... → `Accepted`/`Rejected`).
 - **Not every endpoint has a `[ProducesResponseType]`/XML summary yet** — every `GetAll` action (across all four controllers) is undocumented and untested by design, as a standing exercise in applying the same pattern already used everywhere else.
-- **Integration tests that touch the database run serially, not in parallel** (`API.Tests/AssemblyInfo.cs`) — they share one real Postgres instance now, not an isolated in-memory dictionary per test class, so concurrent seeding at startup can race.
+- **`orderBy=amount` has no supporting index** on `BursaryApplication` paging — it's on the sort allow-list, so at large volume it sorts the student's whole history instead of walking an index.
+- **Page tokens are opaque by convention, not signed.** A client can decode one and build its own; the contract forbids it, but nothing enforces that.
+- **`PUT /api/students/{id}` is still last-writer-wins.** Only `BursaryApplication` has an optimistic-concurrency (`xmin`) token so far.

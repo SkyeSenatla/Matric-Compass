@@ -18,7 +18,7 @@ public class ErrorShapeTests
 
     public ErrorShapeTests(PostgresApiFactory factory)
     {
-        _client = factory.CreateClient();
+        _client = factory.CreateAdminClient();
     }
 
     private async Task<Guid> GetSeededStudentIdAsync(string learnerReferenceNumber)

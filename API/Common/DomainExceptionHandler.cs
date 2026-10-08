@@ -6,6 +6,7 @@ using Domain.Exceptions;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using API.Auth;
 
 // The one catch site for every domain failure in the app. Day 2's
 // ProblemResponses required every action to call it by hand, action by
@@ -28,6 +29,9 @@ public class DomainExceptionHandler : IExceptionHandler
             NotFoundException => (StatusCodes.Status404NotFound, "Not Found"),
             ConflictException => (StatusCodes.Status409Conflict, "Conflict"),
             UnprocessableEntityException => (StatusCodes.Status422UnprocessableEntity, "Unprocessable Entity"),
+            // Week 6 Day 1: "we don't know who you are" — bad login, or a
+            // refresh token that's missing, unknown, expired or already used.
+            AuthenticationFailedException => (StatusCodes.Status401Unauthorized, "Unauthorized"),
             // Week 5 Day 3: optimistic concurrency — the row changed since the
             // client read it. MUST come before the DbUpdateException case
             // below: DbUpdateConcurrencyException IS a DbUpdateException, and

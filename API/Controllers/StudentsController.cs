@@ -3,6 +3,9 @@ using API.Models;
 using Domain.Repositories;
 using API.Services;
 using Domain.Exceptions;
+using Domain.Entities;
+using API.Auth;
+using Microsoft.AspNetCore.Authorization;
 
 namespace API.Controllers;
 
@@ -21,6 +24,7 @@ public class StudentsController : ControllerBase
 {
     private readonly IStudentRepository _studentRepository;
     private readonly IStudentService _studentService;
+    private readonly IAuthorizationService _authorizationService;
 
     // Constructor injection: ASP.NET Core's DI container sees this controller
     // needs an IStudentRepository, looks in the container configured in
@@ -34,10 +38,27 @@ public class StudentsController : ControllerBase
     // they stay on the repository directly. Only CreateStudentAsync and the
     // new payments endpoint have a business rule, so only they go through
     // the service.
-    public StudentsController(IStudentRepository studentRepository, IStudentService studentService)
+    public StudentsController(
+        IStudentRepository studentRepository,
+        IStudentService studentService,
+        IAuthorizationService authorizationService)
     {
         _studentRepository = studentRepository;
         _studentService = studentService;
+        _authorizationService = authorizationService;
+    }
+
+    // Week 6 Day 1: resource-based authorization. [Authorize] can't do this
+    // check — it runs BEFORE the action, before we know which student the
+    // request is about. So the action asks, once it knows.
+    //
+    // Not yours? 404, not 403. A 403 would confirm the student exists; a 404
+    // tells a curious learner nothing about other learners (OWASP: IDOR).
+    private async Task EnsureCanAccessStudentAsync(Guid studentId)
+    {
+        var result = await _authorizationService.AuthorizeAsync(User, studentId, Policies.StudentDataAccess);
+        if (!result.Succeeded)
+            throw new NotFoundException($"Student {studentId} was not found.");
     }
 
     // ── GET: /api/students ──────────────────────────────────────────────
@@ -46,7 +67,14 @@ public class StudentsController : ControllerBase
     // response (Student[] here). That typed schema is what Scalar reads to
     // build its "Test Request" UI, and later what the frontend team's
     // generated TypeScript client depends on.
+    //
+    // Week 6 Day 1: policy-based. Every learner's record in one response is
+    // for staff only.
     [HttpGet]
+    [Authorize(Policy = Policies.StaffOnly)]
+    [ProducesResponseType(typeof(IEnumerable<StudentResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<IEnumerable<StudentResponse>>> GetStudentsAsync()
     {
         var students = await _studentRepository.GetAllAsync();
@@ -68,8 +96,11 @@ public class StudentsController : ControllerBase
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(StudentResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<StudentResponse>> GetStudentByIdAsync(Guid id)
     {
+        await EnsureCanAccessStudentAsync(id);
+
         var student = await _studentRepository.GetByIdAsync(id)
             ?? throw new NotFoundException($"Student {id} was not found.");
 
@@ -100,6 +131,7 @@ public class StudentsController : ControllerBase
     /// <response code="400">The request failed validation.</response>
     /// <response code="409">A student with this learner reference number already exists.</response>
     [HttpPost]
+    [Authorize(Policy = Policies.StaffOnly)]
     [ProducesResponseType(typeof(StudentResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
@@ -127,6 +159,8 @@ public class StudentsController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateStudentAsync(Guid id, StudentUpdateRequest request)
     {
+        await EnsureCanAccessStudentAsync(id);
+
         // Week 5 Day 2: one of only two call sites in the app that need a
         // tracked entity — UpdateAsync relies on the change tracker to
         // notice FullName changed. Every read-only caller takes the default.
@@ -158,8 +192,14 @@ public class StudentsController : ControllerBase
     /// <param name="id">The student's id.</param>
     /// <response code="204">The student was deleted.</response>
     /// <response code="404">No student exists with this id.</response>
+    //
+    // Week 6 Day 1: role-based, for contrast with the policies above. It
+    // works — but the rule "only Admin deletes" now lives in this attribute,
+    // and every other place that rule applies has to repeat it.
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = Roles.Admin)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteStudentAsync(Guid id)
     {

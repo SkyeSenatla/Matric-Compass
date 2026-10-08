@@ -22,7 +22,7 @@ public class ConcurrencyTests
     public ConcurrencyTests(PostgresApiFactory factory)
     {
         _factory = factory;
-        _client = factory.CreateClient();
+        _client = factory.CreateAdminClient();
     }
 
     private async Task<BursaryApplicationResponse> CreateApplicationAsync()

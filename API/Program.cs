@@ -7,6 +7,14 @@ using Infrastructure.Data;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using System.Text;
+using API.Auth;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
 
 // ════════════════════════════════════════════════════
 // PHASE 1 — BUILDER: Register services into the
@@ -38,7 +46,87 @@ builder.Services.AddControllers(options =>
 {
     options.SuppressAsyncSuffixInActionNames = false;
 }); // Register controller support
-builder.Services.AddOpenApi();         // Register built-in OpenAPI document generation
+// Week 6 Day 1: tells the OpenAPI document (and so Scalar) that this API
+// expects "Authorization: Bearer <token>" — Scalar then shows a box to paste
+// the accessToken from POST /api/auth/login into.
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer((document, context, cancellationToken) =>
+    {
+        document.Components ??= new OpenApiComponents();
+        document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+        document.Components.SecuritySchemes["Bearer"] = new OpenApiSecurityScheme
+        {
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            Description = "Paste the accessToken returned by POST /api/auth/login."
+        };
+        document.Security =
+        [
+            new OpenApiSecurityRequirement { [new OpenApiSecuritySchemeReference("Bearer", document)] = [] }
+        ];
+        return Task.CompletedTask;
+    });
+});
+
+// ── Week 6 Day 1: authentication — "who are you?" ───────────────────────
+// Issuer/Audience/lifetimes come from appsettings.json; SigningKey from
+// user-secrets. Same fail-loudly rule as the connection string: a missing or
+// short key is a startup error with the fix in the message, not a 500 on
+// the first login.
+var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
+if (Encoding.UTF8.GetByteCount(jwtOptions.SigningKey) < 32)
+    throw new InvalidOperationException(
+        "Jwt:SigningKey is missing or shorter than 32 bytes. Run 'dotnet user-secrets set " +
+        "Jwt:SigningKey \"<at least 32 random characters>\"' inside the API project.");
+builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        // Keep "sub" and "role" as "sub" and "role". Without this, ASP.NET
+        // Core renames incoming claims to long legacy URIs
+        // (http://schemas.xmlsoap.org/...) and FindFirst("role") finds nothing.
+        options.MapInboundClaims = false;
+
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwtOptions.Issuer,
+            ValidateAudience = true,
+            ValidAudience = jwtOptions.Audience,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey)),
+            // Only the algorithm we sign with. Never trust the token's own
+            // "alg" header to pick (OWASP JWT cheat sheet: "alg": "none").
+            ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+            ValidateLifetime = true,
+            // The default is 5 minutes — which would quietly turn a
+            // 5-minute access token into a 10-minute one.
+            ClockSkew = TimeSpan.FromSeconds(30),
+            NameClaimType = JwtRegisteredClaimNames.Sub,
+            RoleClaimType = AppClaims.Role
+        };
+    });
+
+// ── Week 6 Day 1: authorization — "what may you do?" ────────────────────
+builder.Services.AddAuthorizationBuilder()
+    // Policy-based: controllers name the policy, this line owns the rule.
+    .AddPolicy(Policies.StaffOnly, policy => policy.RequireRole(Roles.Counsellor, Roles.Admin))
+    // Resource-based: needs to know WHICH student — see StudentDataAccessHandler.
+    .AddPolicy(Policies.StudentDataAccess, policy => policy.AddRequirements(new StudentDataAccessRequirement()))
+    // Secure by default: any endpoint without its own [Authorize] or
+    // [AllowAnonymous] still requires a signed-in user. Forgetting an
+    // attribute now fails CLOSED (401), not open.
+    .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+
+// Singletons: none of these hold per-request state.
+builder.Services.AddSingleton<IAuthorizationHandler, StudentDataAccessHandler>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<TokenService>();
+builder.Services.AddSingleton<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
 
 // Day 3: scans this assembly for every class deriving from
 // AbstractValidator<T> (BursaryApplicationCreateRequestValidator,
@@ -107,8 +195,15 @@ builder.Services.AddSingleton<IRepository<AptitudeTest>, InMemoryRepository<Apti
 // Scoped, not Singleton — neither service below holds state of its own
 // between requests, so there's no reason to keep one instance alive for
 // the app's lifetime.
+
 builder.Services.AddScoped<IStudentService, StudentService>();
 builder.Services.AddScoped<IBursaryApplicationService, BursaryApplicationService>();
+
+// Week 6 Day 1: Scoped — both repositories hold a DbContext, and AuthService
+// depends on them, so it can't outlive a request either.
+builder.Services.AddScoped<IUserRepository, EfUserRepository>();
+builder.Services.AddScoped<IRefreshTokenRepository, EfRefreshTokenRepository>();
+builder.Services.AddScoped<AuthService>();
 
 // ════════════════════════════════════════════════════
 // TRANSITION — Build() seals the DI container.
@@ -123,8 +218,10 @@ var app = builder.Build();
 // ════════════════════════════════════════════════════
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();              // Serves /openapi/v1.json
-    app.MapScalarApiReference();   // Serves the Scalar UI at /scalar/v1
+    // Week 6 Day 1: the fallback policy covers EVERY endpoint, including
+    // these two — without AllowAnonymous the docs themselves need a token.
+    app.MapOpenApi().AllowAnonymous();              // Serves /openapi/v1.json
+    app.MapScalarApiReference().AllowAnonymous();   // Serves the Scalar UI at /scalar/v1
 }
 
 // Day 3: wraps the rest of the pipeline in a try/catch and dispatches any
@@ -132,6 +229,16 @@ if (app.Environment.IsDevelopment())
 // MapControllers() so it wraps every controller action that follows it —
 // this is the only catch site left in the whole app.
 app.UseExceptionHandler();
+
+// Week 6 Day 1: a 401 or 403 from the auth middleware has NO body by
+// default. With AddProblemDetails() registered, this turns every empty
+// error response into application/problem+json — one failure shape, still.
+app.UseStatusCodePages();
+
+// Order matters: first work out WHO the caller is, then decide what they
+// may do. Both must sit before MapControllers.
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers(); // Activates attribute routing for all [ApiController] classes
 
@@ -189,7 +296,6 @@ using (var scope = app.Services.CreateScope())
         await tertiaryApplicationRepository.AddAsync(
             new TertiaryApplication(sipho.Id, "University of Johannesburg", "BCom Accounting"));
     }
-
     // Week 5 Day 2: guarded independently of the tertiary seed above.
     // TertiaryApplication is still in-memory (empty on every restart, so its
     // check is always meaningful), but BursaryApplication now persists —
@@ -200,6 +306,7 @@ using (var scope = app.Services.CreateScope())
     // — which downloaded EVERY bursary application into memory just to ask
     // "is there at least one?". AnyAsync() asks Postgres instead, and gets
     // back a single boolean (SELECT EXISTS ...).
+    
     if (thandiwe is not null && sipho is not null
         && !await dbContext.BursaryApplications.AnyAsync())
     {
@@ -209,6 +316,30 @@ using (var scope = app.Services.CreateScope())
         await bursaryApplicationRepository.AddAsync(
             new BursaryApplication(sipho.Id, "Funza Lushaka", 60000m, DateTime.UtcNow.AddMonths(1),
                 new[] { "Certified ID Copy", "Academic Transcript" }));
+    }
+
+    // Week 6 Day 1: three accounts to demo with — one per role. The password
+    // comes from user-secrets, never from source code.
+    if (thandiwe is not null && !await dbContext.Users.AnyAsync())
+    {
+        var seedPassword = builder.Configuration["SeedUsers:Password"]
+            ?? throw new InvalidOperationException(
+                "SeedUsers:Password was not found. Run 'dotnet user-secrets set " +
+                "SeedUsers:Password \"...\"' inside the API project.");
+        var passwordHasher = services.GetRequiredService<IPasswordHasher<AppUser>>();
+        var userRepository = services.GetRequiredService<IUserRepository>();
+
+        var seedUsers = new[]
+        {
+            new AppUser("admin@matric-compass.test", Roles.Admin),
+            new AppUser("counsellor@matric-compass.test", Roles.Counsellor),
+            new AppUser("thandiwe@matric-compass.test", Roles.Learner, thandiwe.Id)
+        };
+        foreach (var user in seedUsers)
+        {
+            user.SetPasswordHash(passwordHasher.HashPassword(user, seedPassword));
+            await userRepository.AddAsync(user);
+        }
     }
 }
 

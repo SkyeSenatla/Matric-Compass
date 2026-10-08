@@ -17,7 +17,7 @@ public class IdempotencyTests
 {
     private readonly HttpClient _client;
 
-    public IdempotencyTests(PostgresApiFactory factory) => _client = factory.CreateClient();
+    public IdempotencyTests(PostgresApiFactory factory) => _client = factory.CreateAdminClient();
 
     [Fact]
     public async Task Deleting_the_same_student_twice_is_204_then_404_but_idempotent_in_effect()

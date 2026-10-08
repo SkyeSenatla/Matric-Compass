@@ -13,7 +13,7 @@ public class PaginationTests
 {
     private readonly HttpClient _client;
 
-    public PaginationTests(PostgresApiFactory factory) => _client = factory.CreateClient();
+    public PaginationTests(PostgresApiFactory factory) => _client = factory.CreateAdminClient();
 
     [Fact]
     public async Task Walking_every_page_returns_each_application_exactly_once_then_an_empty_token()
