@@ -7,6 +7,7 @@ using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using API.Auth;
+using API.Observability;
 
 // The one catch site for every domain failure in the app. Day 2's
 // ProblemResponses required every action to call it by hand, action by
@@ -46,13 +47,29 @@ public class DomainExceptionHandler : IExceptionHandler
             _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred")
         };
 
-        // httpContext.TraceIdentifier is a per-request id ASP.NET Core already
-        // generates — putting it in both the log line and the response body
-        // is what lets support match a parent's screen to an exact log line,
-        // instead of guessing from a timestamp.
-        _logger.LogError(exception,
-            "Request {CorrelationId} failed with {Status}: {Message}",
-            httpContext.TraceIdentifier, status, exception.Message);
+        // Week 6 Day 2: the W3C trace id, not ASP.NET Core's local request id.
+        // The same value is on every log line and every span of this request,
+        // so a learner reading it off an error screen leads straight to the
+        // trace in the dashboard.
+        var correlationId = Correlation.GetId(httpContext);
+
+        if (status >= StatusCodes.Status500InternalServerError)
+        {
+            // A real fault in OUR code: log everything, stack trace included.
+            _logger.LogError(exception,
+                "Request {CorrelationId} failed with {Status}", correlationId, status);
+        }
+        else
+        {
+            // A 4xx is the client's mistake, not a fault — Information, not
+            // Error, so real errors aren't buried. And no exception.Message:
+            // 4xx messages often echo what the client sent ("A student with
+            // LRN LRN-2026-00114 already exists"), and that's a learner's
+            // personal information. The exception TYPE says what went wrong.
+            _logger.LogInformation(
+                "Request {CorrelationId} rejected with {Status} ({ExceptionType})",
+                correlationId, status, exception.GetType().Name);
+        }
 
         httpContext.Response.StatusCode = status;
         await httpContext.Response.WriteAsJsonAsync(new ProblemDetails
@@ -60,9 +77,14 @@ public class DomainExceptionHandler : IExceptionHandler
             Type = $"https://api.matric-compass.co.za/errors/{exception.GetType().Name}",
             Title = title,
             Status = status,
-            Detail = exception.Message,
+            // A 500's message comes from deep inside our code or a library —
+            // a SQL error, a file path, sometimes data. The client gets the
+            // correlation id instead; the details stay in our logs.
+            Detail = status >= StatusCodes.Status500InternalServerError
+                ? "Something went wrong on our side. Quote the correlationId if you report this."
+                : exception.Message,
             Instance = httpContext.Request.Path,
-            Extensions = { ["correlationId"] = httpContext.TraceIdentifier }
+            Extensions = { ["correlationId"] = correlationId }
         }, options: null, contentType: "application/problem+json", cancellationToken);
 
         return true; // "yes, I handled this — stop looking for another handler"

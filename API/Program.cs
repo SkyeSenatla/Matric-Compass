@@ -6,7 +6,6 @@ using Domain.Repositories;
 using Infrastructure.Data;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.Text;
 using API.Auth;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -15,6 +14,14 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using API.Observability;
+using Npgsql;
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 // ════════════════════════════════════════════════════
 // PHASE 1 — BUILDER: Register services into the
@@ -139,7 +146,14 @@ builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 // API/Common/DomainExceptionHandler.cs for what it catches and how it
 // maps each exception type to a status code.
 builder.Services.AddExceptionHandler<DomainExceptionHandler>();
-builder.Services.AddProblemDetails(); // fallback shape for anything the handler above doesn't catch
+builder.Services.AddProblemDetails(options =>
+{
+    // Week 6 Day 2: problem responses the FRAMEWORK writes (401, 403, model
+    // binding 400s) get the same correlationId as the ones our handler
+    // writes, so every error a client can see carries the trace id.
+    options.CustomizeProblemDetails = context =>
+        context.ProblemDetails.Extensions["correlationId"] = Correlation.GetId(context.HttpContext);
+}); // fallback shape for anything the handler above doesn't catch
 
 // Week 5: connection pooling is on by default in the connection string
 // above — nothing to add for that. EnableRetryOnFailure() is not
@@ -147,9 +161,13 @@ builder.Services.AddProblemDetails(); // fallback shape for anything the handler
 // network call that can fail for reasons that have nothing to do with the
 // request itself (a dropped connection, a Postgres restart mid-query).
 //
-// Week 5 Day 2: LogTo() prints every SQL command EF Core sends, one line
-// each — this is what makes the N+1 demo (API.Tests/QueryBehaviorTests.cs)
-// countable on screen instead of just described.
+// Week 6 Day 2: the Week 5 LogTo(Console.WriteLine) line is gone. EF Core
+// already logs every SQL command through ILogger (category
+// Microsoft.EntityFrameworkCore.Database.Command), so LogTo printed each one
+// TWICE. Now one setting in appsettings controls it: Information in
+// Development, Warning in production. Parameter VALUES are never logged
+// (they show as '?') unless EnableSensitiveDataLogging() is switched on —
+// never do that outside a laptop.
 builder.Services.AddDbContext<MatricCompassDbContext>(options =>
 {
     options.UseNpgsql(connectionString, npgsqlOptions =>
@@ -157,7 +175,6 @@ builder.Services.AddDbContext<MatricCompassDbContext>(options =>
             maxRetryCount: 3,
             maxRetryDelay: TimeSpan.FromSeconds(5),
             errorCodesToAdd: null));
-    options.LogTo(Console.WriteLine, LogLevel.Information, DbContextLoggerOptions.SingleLine);
 });
 
 // Register the repository abstraction: any controller that asks for
@@ -205,6 +222,52 @@ builder.Services.AddScoped<IUserRepository, EfUserRepository>();
 builder.Services.AddScoped<IRefreshTokenRepository, EfRefreshTokenRepository>();
 builder.Services.AddScoped<AuthService>();
 
+// ── Week 6 Day 2: observability — logs, traces and metrics ──────────────
+// OpenTelemetry collects what .NET already produces (ILogger, Activity,
+// Meter) and sends it wherever we point it. The service name is how this
+// API is labelled in the dashboard.
+builder.Services.AddSingleton<MatricCompassMetrics>();
+
+var openTelemetry = builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource.AddService("matric-compass-api"))
+    .WithTracing(tracing => tracing
+        // One span per incoming request. Health probes are skipped: they
+        // arrive every few seconds and would bury the real traffic.
+        .AddAspNetCoreInstrumentation(options =>
+            options.Filter = httpContext => !httpContext.Request.Path.StartsWithSegments("/health"))
+        // One child span per SQL command, with the SQL text (never the
+        // parameter VALUES) — this is the N+1 waterfall from Week 5 Day 2.
+        .AddNpgsql())
+    .WithMetrics(metrics => metrics
+        .AddAspNetCoreInstrumentation()               // request rate, errors, duration
+        .AddMeter("System.Runtime")                   // GC, thread pool, CPU (built into .NET)
+        .AddMeter(MatricCompassMetrics.MeterName))    // our own sign-in counters
+    .WithLogging();
+
+// Only export when an OTLP endpoint is configured (launchSettings.json sets
+// it for `dotnet run`). Tests and CI don't set it, so they never try to
+// reach a dashboard that isn't there.
+if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
+    openTelemetry.UseOtlpExporter();
+
+// ── Week 6 Day 2: health checks ─────────────────────────────────────────
+// Tagged "ready": only the readiness endpoint runs it. Liveness must never
+// depend on the database (see the slides: one DB blip, every container
+// restarted at once).
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<MatricCompassDbContext>("database", tags: ["ready"]);
+
+// A probe has to answer FAST. EnableRetryOnFailure (Week 5) retries the
+// health check's connection attempt too — with Postgres down, readiness
+// took ~20 seconds to say "Unhealthy", and Kubernetes gives a probe 1
+// second by default. Cap every check at 3 seconds: a slow answer IS an
+// unhealthy answer.
+builder.Services.Configure<HealthCheckServiceOptions>(options =>
+{
+    foreach (var registration in options.Registrations)
+        registration.Timeout = TimeSpan.FromSeconds(3);
+});
+
 // ════════════════════════════════════════════════════
 // TRANSITION — Build() seals the DI container.
 // Nothing can be registered after this line.
@@ -239,6 +302,15 @@ app.UseStatusCodePages();
 // may do. Both must sit before MapControllers.
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Week 6 Day 2: liveness runs NO checks — if the process can answer at
+// all, it's alive. Readiness runs the "ready"-tagged checks (Postgres).
+// Both are anonymous: the platform probing them has no token, and the
+// response is just "Healthy" or "Unhealthy" — nothing about our internals.
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false })
+    .AllowAnonymous();
+app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") })
+    .AllowAnonymous();
 
 app.MapControllers(); // Activates attribute routing for all [ApiController] classes
 

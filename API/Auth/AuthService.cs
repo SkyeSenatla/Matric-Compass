@@ -1,6 +1,7 @@
 namespace API.Auth;
 
 using API.Models;
+using API.Observability;
 using Domain.Entities;
 using Domain.Repositories;
 using Microsoft.AspNetCore.Identity;
@@ -26,6 +27,8 @@ public class AuthService
     private readonly TokenService _tokenService;
     private readonly JwtOptions _options;
     private readonly TimeProvider _clock;
+    private readonly ILogger<AuthService> _logger;
+    private readonly MatricCompassMetrics _metrics;
 
     public AuthService(
         IUserRepository users,
@@ -33,7 +36,9 @@ public class AuthService
         IPasswordHasher<AppUser> passwordHasher,
         TokenService tokenService,
         IOptions<JwtOptions> options,
-        TimeProvider clock)
+        TimeProvider clock,
+        ILogger<AuthService> logger,
+        MatricCompassMetrics metrics)
     {
         _users = users;
         _refreshTokens = refreshTokens;
@@ -41,6 +46,8 @@ public class AuthService
         _tokenService = tokenService;
         _options = options.Value;
         _clock = clock;
+        _logger = logger;
+        _metrics = metrics;
     }
 
     private TimeSpan RefreshLifetime => TimeSpan.FromDays(_options.RefreshTokenDays);
@@ -57,7 +64,21 @@ public class AuthService
         // ONE message for "no such email" and "wrong password". Telling them
         // apart tells an attacker which emails are worth guessing passwords for.
         if (user is null || result == PasswordVerificationResult.Failed)
+        {
+            // Week 6 Day 2: a security event worth recording — but NOT the
+            // email that was typed. Our own user id is enough to investigate
+            // a known account; an unknown email is recorded as just that.
+            if (user is null)
+                _logger.LogInformation("Sign-in failed: no account matches the submitted email");
+            else
+                _logger.LogInformation("Sign-in failed: wrong password for user {UserId}", user.Id);
+
+            _metrics.SignInAttempted(succeeded: false);
             throw new AuthenticationFailedException("Email or password is incorrect.");
+        }
+
+        _logger.LogInformation("User {UserId} signed in", user.Id);
+        _metrics.SignInAttempted(succeeded: true);
 
         var (rawToken, tokenHash) = _tokenService.CreateRefreshToken();
         var refreshToken = RefreshToken.StartFamily(user.Id, tokenHash, Now, RefreshLifetime);
@@ -83,6 +104,14 @@ public class AuthService
             // server can't tell which. So the whole family dies, and the real
             // user simply signs in again. The attacker's copy is now worthless.
             await _refreshTokens.RevokeFamilyAsync(current.FamilyId, now);
+
+            // Week 6 Day 2: the most important security log line in the app.
+            // Warning, not Information: someone should look at this.
+            _logger.LogWarning(
+                "Refresh token reuse detected for user {UserId}; token family {FamilyId} revoked",
+                current.UserId, current.FamilyId);
+            _metrics.RefreshTokenReuseDetected();
+
             throw new AuthenticationFailedException("Refresh token was already used. Please sign in again.");
         }
 
