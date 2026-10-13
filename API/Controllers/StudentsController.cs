@@ -1,3 +1,4 @@
+using API.Common;
 using Microsoft.AspNetCore.Mvc;
 using API.Models;
 using Domain.Repositories;
@@ -19,7 +20,7 @@ namespace API.Controllers;
 // "Controller" suffix: StudentsController -> api/students. This is automatic
 // and consistent across every controller we add later.
 [ApiController]
-[Route("api/[controller]")]
+[Route(ApiRoutes.V1 + "/[controller]")]
 public class StudentsController : ControllerBase
 {
     private readonly IStudentRepository _studentRepository;

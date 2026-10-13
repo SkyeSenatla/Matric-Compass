@@ -1,3 +1,4 @@
+using API.Common;
 using Microsoft.AspNetCore.Mvc;
 using FluentValidation;
 using API.Models;
@@ -20,7 +21,7 @@ namespace API.Controllers;
 // produce "api/BursaryApplications", not the "api/bursary-applications"
 // the brief specifies.
 [ApiController]
-[Route("api/bursary-applications")]
+[Route(ApiRoutes.V1 + "/bursary-applications")]
 public class BursaryApplicationsController : ControllerBase
 {
     private readonly IBursaryApplicationRepository _bursaryApplicationRepository;

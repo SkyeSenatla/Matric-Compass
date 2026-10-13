@@ -1,3 +1,4 @@
+using API.Common;
 using Microsoft.AspNetCore.Mvc;
 using FluentValidation;
 using API.Models;
@@ -16,7 +17,7 @@ namespace API.Controllers;
 // — is already handled by DomainExceptionHandler without this file
 // needing a single try, catch, or null check of its own.
 [ApiController]
-[Route("api/aptitude-tests")]
+[Route(ApiRoutes.V1 + "/aptitude-tests")]
 public class AptitudeTestsController : ControllerBase
 {
     private readonly IRepository<AptitudeTest> _aptitudeTestRepository;

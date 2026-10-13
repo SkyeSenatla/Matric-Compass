@@ -6,6 +6,7 @@ using Domain.Exceptions;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using System.Text.Json;
 using API.Auth;
 using API.Observability;
 
@@ -71,21 +72,36 @@ public class DomainExceptionHandler : IExceptionHandler
                 correlationId, status, exception.GetType().Name);
         }
 
+        // Week 6 Day 3: a validation failure gets the SAME shape as the
+        // framework's own model-binding 400 — an "errors" map from field name
+        // to messages — so a form can put each message under its own field.
+        // Names are camelCased to match the JSON the client actually sent.
+        var problem = exception is ValidationException validationException
+            ? new ValidationProblemDetails(validationException.Errors
+                .GroupBy(error => JsonNamingPolicy.CamelCase.ConvertName(error.PropertyName))
+                .ToDictionary(group => group.Key, group => group.Select(error => error.ErrorMessage).ToArray()))
+            : new ProblemDetails();
+
+        problem.Type = $"https://api.matric-compass.co.za/errors/{exception.GetType().Name}";
+        problem.Title = title;
+        problem.Status = status;
+        // A 500's message comes from deep inside our code or a library — a SQL
+        // error, a file path, sometimes data. The client gets the correlation
+        // id instead; the details stay in our logs. A validation failure's
+        // messages are in "errors", so its detail is one plain sentence.
+        problem.Detail = status >= StatusCodes.Status500InternalServerError
+            ? "Something went wrong on our side. Quote the correlationId if you report this."
+            : exception is ValidationException
+                ? "One or more fields are invalid."
+                : exception.Message;
+        problem.Instance = httpContext.Request.Path;
+        problem.Extensions["correlationId"] = correlationId;
+
         httpContext.Response.StatusCode = status;
-        await httpContext.Response.WriteAsJsonAsync(new ProblemDetails
-        {
-            Type = $"https://api.matric-compass.co.za/errors/{exception.GetType().Name}",
-            Title = title,
-            Status = status,
-            // A 500's message comes from deep inside our code or a library —
-            // a SQL error, a file path, sometimes data. The client gets the
-            // correlation id instead; the details stay in our logs.
-            Detail = status >= StatusCodes.Status500InternalServerError
-                ? "Something went wrong on our side. Quote the correlationId if you report this."
-                : exception.Message,
-            Instance = httpContext.Request.Path,
-            Extensions = { ["correlationId"] = correlationId }
-        }, options: null, contentType: "application/problem+json", cancellationToken);
+        // problem.GetType(), not ProblemDetails: serialize what the object
+        // really is, or the "errors" property is silently left out.
+        await httpContext.Response.WriteAsJsonAsync(problem, problem.GetType(), options: null,
+            contentType: "application/problem+json", cancellationToken);
 
         return true; // "yes, I handled this — stop looking for another handler"
     }

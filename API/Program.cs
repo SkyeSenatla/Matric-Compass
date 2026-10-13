@@ -22,6 +22,9 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using System.Globalization;
+using System.Threading.RateLimiting;
+using System.Text.Json.Serialization;
 
 // ════════════════════════════════════════════════════
 // PHASE 1 — BUILDER: Register services into the
@@ -52,7 +55,25 @@ var connectionString = builder.Configuration.GetConnectionString("MatricCompass"
 builder.Services.AddControllers(options =>
 {
     options.SuppressAsyncSuffixInActionNames = false;
+})
+// Week 6 Day 3: when a JSON body can't be read (text where a number
+// belongs), the 400 says "The input was not valid." instead of naming our
+// internal C# type: API.Models.BursaryApplicationCreateRequest is nobody's
+// business outside this codebase.
+.AddJsonOptions(options =>
+{
+    options.AllowInputFormatterExceptionMessages = false;
+    // Week 6 Day 3 (Demo 6): numbers are numbers. The web defaults also
+    // ACCEPT "100" (a string) where a number belongs, so the OpenAPI document
+    // must describe every number as "number OR string" — and the generated
+    // TypeScript type becomes number | string. Strict: only real numbers.
+    options.JsonSerializerOptions.NumberHandling = JsonNumberHandling.Strict;
 }); // Register controller support
+// The OpenAPI document is built from THESE options (the minimal-API ones),
+// not the controller ones above, so both must say the same thing: one
+// describes the contract, the other is what the controllers actually do.
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.NumberHandling = JsonNumberHandling.Strict);
 // Week 6 Day 1: tells the OpenAPI document (and so Scalar) that this API
 // expects "Authorization: Bearer <token>" — Scalar then shows a box to paste
 // the accessToken from POST /api/auth/login into.
@@ -67,7 +88,7 @@ builder.Services.AddOpenApi(options =>
             Type = SecuritySchemeType.Http,
             Scheme = "bearer",
             BearerFormat = "JWT",
-            Description = "Paste the accessToken returned by POST /api/auth/login."
+            Description = "Paste the accessToken returned by POST /api/v1/auth/login."
         };
         document.Security =
         [
@@ -122,6 +143,8 @@ builder.Services
 builder.Services.AddAuthorizationBuilder()
     // Policy-based: controllers name the policy, this line owns the rule.
     .AddPolicy(Policies.StaffOnly, policy => policy.RequireRole(Roles.Counsellor, Roles.Admin))
+    // Week 6 Day 3: the learner dashboard is about "my" data only.
+    .AddPolicy(Policies.LearnerOnly, policy => policy.RequireRole(Roles.Learner))
     // Resource-based: needs to know WHICH student — see StudentDataAccessHandler.
     .AddPolicy(Policies.StudentDataAccess, policy => policy.AddRequirements(new StudentDataAccessRequirement()))
     // Secure by default: any endpoint without its own [Authorize] or
@@ -215,6 +238,8 @@ builder.Services.AddSingleton<IRepository<AptitudeTest>, InMemoryRepository<Apti
 
 builder.Services.AddScoped<IStudentService, StudentService>();
 builder.Services.AddScoped<IBursaryApplicationService, BursaryApplicationService>();
+// Week 6 Day 3: composes the learner dashboard from two repositories.
+builder.Services.AddScoped<LearnerDashboardService>();
 
 // Week 6 Day 1: Scoped — both repositories hold a DbContext, and AuthService
 // depends on them, so it can't outlive a request either.
@@ -268,6 +293,83 @@ builder.Services.Configure<HealthCheckServiceOptions>(options =>
         registration.Timeout = TimeSpan.FromSeconds(3);
 });
 
+// ── Week 6 Day 3: CORS — which BROWSER origins may read our responses ───
+// The list lives in configuration, not code: localhost:3000 in Development,
+// the real frontend domain in production — and an empty list means no
+// browser origin at all. Never "any origin": with credentials, that hands
+// every website on the internet your users' sessions.
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+
+builder.Services.AddCors(options => options.AddPolicy(CorsPolicies.Frontend, policy => policy
+    .WithOrigins(allowedOrigins)
+    // The refresh token is a cookie, so the browser must send credentials.
+    // With AllowCredentials, origins must be listed exactly — no "*".
+    .AllowCredentials()
+    .WithMethods("GET", "POST", "PUT", "DELETE")
+    // traceparent: so yesterday's trace can start in the browser.
+    .WithHeaders("Authorization", "Content-Type", "traceparent")
+    // Retry-After isn't on the browser's short list of response headers
+    // JavaScript may read cross-origin; without this, the React app
+    // gets the 429 but can't see how long to wait.
+    .WithExposedHeaders("Retry-After")
+    // The browser may cache a successful preflight for this long instead of
+    // asking again before every request.
+    .SetPreflightMaxAge(TimeSpan.FromMinutes(10))));
+
+// ── Week 6 Day 3: rate limiting ─────────────────────────────────────────
+// Login first: Day 1 left it open to unlimited password guesses. The limit
+// comes from configuration, so tests and a busy school lab can be given a
+// different number without a code change.
+var loginPermitLimit = builder.Configuration.GetValue("RateLimiting:Login:PermitLimit", 5);
+var loginWindow = TimeSpan.FromSeconds(builder.Configuration.GetValue("RateLimiting:Login:WindowSeconds", 60));
+
+builder.Services.AddRateLimiter(options =>
+{
+    // Partitioned by IP address — before login it's the only thing we know
+    // about the caller. (A school lab shares one IP, and behind a proxy
+    // every request looks like the proxy: see the slides.)
+    options.AddPolicy(RateLimitPolicies.Login, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = loginPermitLimit,
+                Window = loginWindow,
+                QueueLimit = 0 // reject straight away; never park a login request
+            }));
+    // The default is 503 Service Unavailable — "the server is down". That's
+    // the wrong message: 429 says "YOU are sending too much, slow down".
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        // Retry-After: how many seconds until this caller may try again.
+        var hasRetryAfter = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter);
+        var retryAfterSeconds = (int)Math.Ceiling(retryAfter.TotalSeconds);
+        if (hasRetryAfter)
+            context.HttpContext.Response.Headers.RetryAfter = retryAfterSeconds.ToString(CultureInfo.InvariantCulture);
+
+        // Written through the same ProblemDetails service the framework uses
+        // for 401/403, so it gets a correlationId like every other error.
+        // (Left to UseStatusCodePages, a 429 has no "title" or "type" at all:
+        // the framework has no default text for 429.)
+        var problemDetailsService = context.HttpContext.RequestServices.GetRequiredService<IProblemDetailsService>();
+        await problemDetailsService.WriteAsync(new ProblemDetailsContext
+        {
+            HttpContext = context.HttpContext,
+            ProblemDetails =
+            {
+                Type = "https://tools.ietf.org/html/rfc6585#section-4",
+                Title = "Too Many Requests",
+                Status = StatusCodes.Status429TooManyRequests,
+                Detail = hasRetryAfter
+                    ? $"Too many attempts. Try again in {retryAfterSeconds} seconds."
+                    : "Too many attempts. Try again later."
+            }
+        });
+    };
+});
+
 // ════════════════════════════════════════════════════
 // TRANSITION — Build() seals the DI container.
 // Nothing can be registered after this line.
@@ -298,9 +400,20 @@ app.UseExceptionHandler();
 // error response into application/problem+json — one failure shape, still.
 app.UseStatusCodePages();
 
+// Week 6 Day 3: before authentication, so a preflight (which never carries
+// a token) is answered here instead of being rejected with a 401 — and so
+// every response after this point, errors included, carries the CORS
+// headers the browser needs in order to read it.
+app.UseCors(CorsPolicies.Frontend);
+
 // Order matters: first work out WHO the caller is, then decide what they
 // may do. Both must sit before MapControllers.
 app.UseAuthentication();
+
+// Week 6 Day 3: after authentication (a per-user policy could use the
+// caller's id), before authorization and the endpoints it protects.
+app.UseRateLimiter();
+
 app.UseAuthorization();
 
 // Week 6 Day 2: liveness runs NO checks — if the process can answer at

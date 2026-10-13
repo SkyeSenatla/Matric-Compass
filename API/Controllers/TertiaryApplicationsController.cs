@@ -1,3 +1,4 @@
+using API.Common;
 using Microsoft.AspNetCore.Mvc;
 using API.Models;
 using Domain.Repositories;
@@ -16,7 +17,7 @@ namespace API.Controllers;
 // "api/TertiaryApplications" instead of the "api/tertiary-applications"
 // the project brief specifies.
 [ApiController]
-[Route("api/tertiary-applications")]
+[Route(ApiRoutes.V1 + "/tertiary-applications")]
 public class TertiaryApplicationsController : ControllerBase
 {
     private readonly IRepository<TertiaryApplication> _tertiaryApplicationRepository;

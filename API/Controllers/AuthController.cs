@@ -1,18 +1,20 @@
+using API.Common;
 using API.Auth;
 using API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace API.Controllers;
 
 // Week 6 Day 1: the only controller anyone can call without a token —
 // you can't be asked for a token on the endpoint that gives you one.
 [ApiController]
-[Route("api/auth")]
+[Route(ApiRoutes.V1 + "/auth")]
 [AllowAnonymous]
 public class AuthController : ControllerBase
 {
-    // Scoped to /api/auth: the browser only sends this cookie to the three
+    // Scoped to /api/v1/auth: the browser only sends this cookie to the three
     // endpoints below, never with ordinary API calls.
     private const string RefreshCookieName = "refresh_token";
 
@@ -23,9 +25,12 @@ public class AuthController : ControllerBase
     /// <summary>Signs in with email and password.</summary>
     /// <response code="200">Signed in. The refresh token is set as an HttpOnly cookie.</response>
     /// <response code="401">Email or password is incorrect.</response>
+    /// <response code="429">Too many sign-in attempts. Wait for the number of seconds in Retry-After.</response>
     [HttpPost("login")]
+    [EnableRateLimiting(RateLimitPolicies.Login)]
     [ProducesResponseType(typeof(TokenResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult<TokenResponse>> LoginAsync(LoginRequest request)
     {
         var result = await _authService.LoginAsync(request);
@@ -63,13 +68,14 @@ public class AuthController : ControllerBase
     // HttpOnly: JavaScript can't read it, so an XSS bug can't steal it.
     // Secure:   only ever sent over HTTPS.
     // SameSite=Strict: never sent on a request another site triggers (CSRF).
-    // Path:     only sent to /api/auth/*.
+    // Path:     only sent to /api/v1/auth/*. It MUST match the route above —
+    //           a cookie scoped to /api/auth is never sent to /api/v1/auth.
     private static CookieOptions RefreshCookieOptions(DateTime? expires) => new()
     {
         HttpOnly = true,
         Secure = true,
         SameSite = SameSiteMode.Strict,
-        Path = "/api/auth",
+        Path = "/" + ApiRoutes.V1 + "/auth",
         Expires = expires
     };
 }

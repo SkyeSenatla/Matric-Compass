@@ -10,6 +10,7 @@ public static class Policies
 {
     public const string StaffOnly = "StaffOnly";
     public const string StudentDataAccess = "StudentDataAccess";
+    public const string LearnerOnly = "LearnerOnly";
 }
 
 // "May this caller touch data belonging to this student?" — a question no
