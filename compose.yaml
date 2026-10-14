@@ -1,0 +1,59 @@
+# Week 6 Day 4: the whole system for LOCAL use — the API, its database and
+# the telemetry dashboard — started with one command: docker compose up --build
+#
+# Secrets come from a .env file next to this one (never committed). Copy
+# .env.example to .env and fill it in; compose refuses to start without it.
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: matric_compass
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      # Named volume: the data survives "docker compose down" and restarts.
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # "Container running" is not "Postgres accepting connections".
+      # pg_isready asks Postgres itself.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d matric_compass"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # No "ports:" — only the API needs to reach the database, and it does so
+    # inside compose's network. Your Week 5 container keeps port 5432.
+
+  api:
+    build: .
+    ports:
+      # Same port as "dotnet run", so the frontend's API URL doesn't change.
+      - "5146:8080"
+    environment:
+      # Development: Scalar, the localhost:3000 CORS origin and readable SQL
+      # logs. This file is for running locally, not for production.
+      ASPNETCORE_ENVIRONMENT: Development
+      # Inside compose, the database's host name is its SERVICE name.
+      # "localhost" here would mean "this API container".
+      ConnectionStrings__MatricCompass: "Host=postgres;Port=5432;Database=matric_compass;Username=postgres;Password=${POSTGRES_PASSWORD}"
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
+      SeedUsers__Password: ${SEED_USERS_PASSWORD:?Set SEED_USERS_PASSWORD in .env}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://aspire-dashboard:18889
+      # How often the cleanup job runs. 60 minutes unless you set
+      # CLEANUP_INTERVAL_MINUTES in your shell or .env (the demo uses 1).
+      BackgroundJobs__RefreshTokenCleanup__IntervalMinutes: ${CLEANUP_INTERVAL_MINUTES:-60}
+    depends_on:
+      postgres:
+        # Wait for the health check to PASS, not just for the container to
+        # start — the API runs its migrations the moment it boots.
+        condition: service_healthy
+
+  aspire-dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:13.6.1
+    ports:
+      - "18888:18888"
+    environment:
+      ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
+
+volumes:
+  postgres-data:

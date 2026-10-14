@@ -13,6 +13,7 @@ public sealed class MatricCompassMetrics
 
     private readonly Counter<long> _signIns;
     private readonly Counter<long> _refreshTokenReuse;
+    private readonly Counter<long> _refreshTokensDeleted;
 
     public MatricCompassMetrics(IMeterFactory meterFactory)
     {
@@ -27,6 +28,12 @@ public sealed class MatricCompassMetrics
             "matric_compass.auth.refresh_token_reuse",
             unit: "{event}",
             description: "Times a spent refresh token was presented again.");
+
+        // Week 6 Day 4: how much the cleanup job removes on each run.
+        _refreshTokensDeleted = meter.CreateCounter<long>(
+            "matric_compass.jobs.refresh_tokens_deleted",
+            unit: "{token}",
+            description: "Expired refresh tokens deleted by the cleanup job.");
     }
 
     // Tags are counted per distinct value, so they must come from a small,
@@ -36,4 +43,6 @@ public sealed class MatricCompassMetrics
         _signIns.Add(1, new KeyValuePair<string, object?>("outcome", succeeded ? "success" : "failure"));
 
     public void RefreshTokenReuseDetected() => _refreshTokenReuse.Add(1);
+
+    public void RefreshTokensDeleted(int count) => _refreshTokensDeleted.Add(count);
 }

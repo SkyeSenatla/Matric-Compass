@@ -25,6 +25,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System.Globalization;
 using System.Threading.RateLimiting;
 using System.Text.Json.Serialization;
+using API.Background;
 
 // ════════════════════════════════════════════════════
 // PHASE 1 — BUILDER: Register services into the
@@ -260,6 +261,9 @@ var openTelemetry = builder.Services.AddOpenTelemetry()
         // arrive every few seconds and would bury the real traffic.
         .AddAspNetCoreInstrumentation(options =>
             options.Filter = httpContext => !httpContext.Request.Path.StartsWithSegments("/health"))
+        // Week 6 Day 4: background jobs have no request to hang a span on,
+        // so they start their own — this line lets OpenTelemetry see them.
+        .AddSource(RefreshTokenCleanupService.ActivitySourceName)
         // One child span per SQL command, with the SQL text (never the
         // parameter VALUES) — this is the N+1 waterfall from Week 5 Day 2.
         .AddNpgsql())
@@ -369,6 +373,14 @@ builder.Services.AddRateLimiter(options =>
         });
     };
 });
+
+// ── Week 6 Day 4: background job — refresh-token cleanup ────────────────
+// AddHostedService starts the job with the app and stops it with the app.
+// The schedule comes from configuration, like every other tunable since Week 5.
+builder.Services.AddSingleton(new RefreshTokenCleanupOptions(
+    Interval: TimeSpan.FromMinutes(builder.Configuration.GetValue("BackgroundJobs:RefreshTokenCleanup:IntervalMinutes", 60)),
+    RetainExpiredFor: TimeSpan.FromDays(builder.Configuration.GetValue("BackgroundJobs:RefreshTokenCleanup:RetainExpiredDays", 30))));
+builder.Services.AddHostedService<RefreshTokenCleanupService>();
 
 // ════════════════════════════════════════════════════
 // TRANSITION — Build() seals the DI container.

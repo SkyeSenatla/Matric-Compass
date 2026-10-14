@@ -27,8 +27,8 @@ public class ConcurrencyTests
 
     private async Task<BursaryApplicationResponse> CreateApplicationAsync()
     {
-        var students = await _client.GetFromJsonAsync<List<StudentResponse>>("/api/students");
-        var created = await _client.PostAsJsonAsync("/api/bursary-applications", new
+        var students = await _client.GetFromJsonAsync<List<StudentResponse>>("/api/v1/students");
+        var created = await _client.PostAsJsonAsync("/api/v1/bursary-applications", new
         {
             studentId = students!.First().Id,
             funder = $"Concurrency Test Fund {Guid.NewGuid():N}",
@@ -71,7 +71,7 @@ public class ConcurrencyTests
     public async Task Update_with_a_stale_version_returns_409_problem_json()
     {
         var application = await CreateApplicationAsync();
-        var url = $"/api/bursary-applications/{application.Id}";
+        var url = $"/api/v1/bursary-applications/{application.Id}";
 
         // First edit, based on the version from the original read: succeeds.
         var first = await _client.PutAsJsonAsync(url,

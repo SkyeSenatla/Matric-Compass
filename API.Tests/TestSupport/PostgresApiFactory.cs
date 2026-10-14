@@ -39,6 +39,10 @@ public class PostgresApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("ConnectionStrings:MatricCompass", _container.GetConnectionString());
         builder.UseSetting("Jwt:SigningKey", TestSigningKey);
         builder.UseSetting("SeedUsers:Password", SeedPassword);
+        // Week 6 Day 3: every test client shares one "IP address", so the
+        // real login limit (5 a minute) would start failing unrelated tests.
+        // The rate-limit test sets its own low limit (FrontendContractTests).
+        builder.UseSetting("RateLimiting:Login:PermitLimit", "1000");
     }
 
     async Task IAsyncLifetime.DisposeAsync() => await _container.DisposeAsync();

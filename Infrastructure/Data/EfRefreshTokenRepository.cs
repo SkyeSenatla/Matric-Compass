@@ -35,4 +35,12 @@ public class EfRefreshTokenRepository : IRefreshTokenRepository
         await _dbContext.RefreshTokens
             .Where(t => t.FamilyId == familyId && t.RevokedAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, (DateTime?)now));
+
+    public async Task<int> DeleteExpiredBeforeAsync(DateTime cutoff, CancellationToken cancellationToken) =>
+        // Week 6 Day 4: one set-based DELETE, straight in the database — no
+        // rows loaded into memory, and safe to run twice (the second run just
+        // finds nothing to delete).
+        await _dbContext.RefreshTokens
+            .Where(t => t.ExpiresAt < cutoff)
+            .ExecuteDeleteAsync(cancellationToken);
 }

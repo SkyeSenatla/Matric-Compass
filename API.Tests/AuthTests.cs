@@ -34,7 +34,7 @@ public class AuthTests
     private async Task<Guid> GetStudentIdAsync(string learnerReferenceNumber)
     {
         var students = await _factory.CreateAdminClient()
-            .GetFromJsonAsync<List<StudentResponse>>("/api/students");
+            .GetFromJsonAsync<List<StudentResponse>>("/api/v1/students");
         return students!.Single(s => s.LearnerReferenceNumber == learnerReferenceNumber).Id;
     }
 
@@ -49,7 +49,7 @@ public class AuthTests
 
     private Task<HttpResponseMessage> RefreshAsync(string rawRefreshToken)
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/refresh");
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/refresh");
         request.Headers.Add("Cookie", $"refresh_token={rawRefreshToken}");
         return _anonymous.SendAsync(request);
     }
@@ -57,7 +57,7 @@ public class AuthTests
     [Fact]
     public async Task No_token_is_401_problem_json()
     {
-        var response = await _anonymous.GetAsync("/api/students");
+        var response = await _anonymous.GetAsync("/api/v1/students");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
@@ -68,7 +68,7 @@ public class AuthTests
     {
         var learner = _factory.CreateClientAs(Roles.Learner, await GetStudentIdAsync("LRN-2026-00114"));
 
-        var response = await learner.GetAsync("/api/students");
+        var response = await learner.GetAsync("/api/v1/students");
 
         // 401 = "who are you?"  403 = "I know who you are — and no."
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
@@ -82,8 +82,8 @@ public class AuthTests
         var siphoId = await GetStudentIdAsync("LRN-2026-00287");
         var thandiwe = _factory.CreateClientAs(Roles.Learner, thandiweId);
 
-        var own = await thandiwe.GetAsync($"/api/students/{thandiweId}");
-        var someoneElses = await thandiwe.GetAsync($"/api/students/{siphoId}");
+        var own = await thandiwe.GetAsync($"/api/v1/students/{thandiweId}");
+        var someoneElses = await thandiwe.GetAsync($"/api/v1/students/{siphoId}");
 
         Assert.Equal(HttpStatusCode.OK, own.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, someoneElses.StatusCode); // not 403: don't confirm it exists
@@ -95,7 +95,7 @@ public class AuthTests
         var siphoId = await GetStudentIdAsync("LRN-2026-00287");
         var counsellor = _factory.CreateClientAs(Roles.Counsellor);
 
-        var response = await counsellor.DeleteAsync($"/api/students/{siphoId}");
+        var response = await counsellor.DeleteAsync($"/api/v1/students/{siphoId}");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -103,9 +103,9 @@ public class AuthTests
     [Fact]
     public async Task Wrong_password_is_401_and_says_nothing_about_which_part_was_wrong()
     {
-        var wrongPassword = await _anonymous.PostAsJsonAsync("/api/auth/login",
+        var wrongPassword = await _anonymous.PostAsJsonAsync("/api/v1/auth/login",
             new LoginRequest(LearnerEmail, "not-the-password"));
-        var unknownEmail = await _anonymous.PostAsJsonAsync("/api/auth/login",
+        var unknownEmail = await _anonymous.PostAsJsonAsync("/api/v1/auth/login",
             new LoginRequest("nobody@matric-compass.test", "not-the-password"));
 
         Assert.Equal(HttpStatusCode.Unauthorized, wrongPassword.StatusCode);
@@ -118,13 +118,13 @@ public class AuthTests
     [Fact]
     public async Task Login_then_the_access_token_works_on_a_protected_endpoint()
     {
-        var login = await _anonymous.PostAsJsonAsync("/api/auth/login",
+        var login = await _anonymous.PostAsJsonAsync("/api/v1/auth/login",
             new LoginRequest(LearnerEmail, PostgresApiFactory.SeedPassword));
         login.EnsureSuccessStatusCode();
         var tokens = await login.Content.ReadFromJsonAsync<TokenResponse>();
         ReadRefreshCookie(login); // asserts the cookie flags
 
-        var request = new HttpRequestMessage(HttpMethod.Get, $"/api/students/{await GetStudentIdAsync("LRN-2026-00114")}");
+        var request = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/students/{await GetStudentIdAsync("LRN-2026-00114")}");
         request.Headers.Authorization = new("Bearer", tokens!.AccessToken);
         var response = await _anonymous.SendAsync(request);
 
@@ -134,7 +134,7 @@ public class AuthTests
     [Fact]
     public async Task Refresh_rotates_and_reusing_a_spent_token_revokes_the_whole_family()
     {
-        var login = await _anonymous.PostAsJsonAsync("/api/auth/login",
+        var login = await _anonymous.PostAsJsonAsync("/api/v1/auth/login",
             new LoginRequest(LearnerEmail, PostgresApiFactory.SeedPassword));
         login.EnsureSuccessStatusCode();
         var first = ReadRefreshCookie(login);
@@ -157,11 +157,11 @@ public class AuthTests
     [Fact]
     public async Task Logout_revokes_the_refresh_token()
     {
-        var login = await _anonymous.PostAsJsonAsync("/api/auth/login",
+        var login = await _anonymous.PostAsJsonAsync("/api/v1/auth/login",
             new LoginRequest(LearnerEmail, PostgresApiFactory.SeedPassword));
         var refreshToken = ReadRefreshCookie(login);
 
-        var logout = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout");
+        var logout = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/logout");
         logout.Headers.Add("Cookie", $"refresh_token={refreshToken}");
         Assert.Equal(HttpStatusCode.NoContent, (await _anonymous.SendAsync(logout)).StatusCode);
 

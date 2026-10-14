@@ -4,6 +4,99 @@ An API that helps South African matric (Grade 12) students track their subjects,
 
 Built incrementally as a teaching project: each week/day adds one deliberate concept on top of a working API, rather than shipping a finished app up front.
 
+## Run it and build against it (frontend handoff)
+
+Everything a frontend developer needs, without asking anyone.
+
+### Run it
+
+You need **Docker Desktop** and nothing else: no .NET SDK, no PostgreSQL install.
+
+```powershell
+Copy-Item .env.example .env    # then fill in the three values; .env is never committed
+docker compose up --build
+```
+
+| What | Where |
+|---|---|
+| API | `http://localhost:5146/api/v1` |
+| Interactive docs (Scalar) | `http://localhost:5146/scalar/v1` |
+| OpenAPI document | `http://localhost:5146/openapi/v1.json` |
+| Health | `/health/live` (process up) and `/health/ready` (database reachable) |
+| Logs, traces and metrics | `http://localhost:18888` (Aspire dashboard) |
+
+`docker compose down` stops everything and keeps the data. `docker compose down -v` also deletes the database.
+
+### Accounts
+
+Seeded on first start. Every account's password is `SEED_USERS_PASSWORD` from your `.env`.
+
+| Email | Role | Can |
+|---|---|---|
+| `admin@matric-compass.test` | Admin | Everything |
+| `counsellor@matric-compass.test` | Counsellor | All learners' data |
+| `thandiwe@matric-compass.test` | Learner | Only Thandiwe Nkosi's own data, including `GET /api/v1/me/dashboard` |
+
+### Authentication
+
+- `POST /api/v1/auth/login` with `{ "email", "password" }` returns `{ accessToken, expiresAt }` and sets an HttpOnly `refresh_token` cookie.
+- Send `Authorization: Bearer <accessToken>` on every other call. Keep the access token **in memory**, never in `localStorage`. It lasts 5 minutes.
+- On a 401, call `POST /api/v1/auth/refresh` with `credentials: "include"` and no body. Each refresh token works exactly once. Replaying an old one signs the user out everywhere.
+- `POST /api/v1/auth/logout` (also with `credentials: "include"`) ends the session.
+
+### Calling it from the browser
+
+- **Allowed origin in Development:** `http://localhost:3000`, with credentials. Every other origin is refused.
+- **Login is limited to 5 attempts a minute per IP address.** Beyond that: `429` with a `Retry-After` header, in seconds.
+- **Numbers are JSON numbers, never strings.** Money is sent as **integer cents** (`amountInCents`). Dates are UTC ISO 8601 (ending in `Z`). Statuses are names (`"Submitted"`), not numbers.
+- **Lists that can grow are paged.** `GET /api/v1/bursary-applications` takes `pageSize` and `pageToken`, and returns `{ items, nextPageToken }`. Treat the token as opaque.
+
+### Errors
+
+Every error is `application/problem+json` with `type`, `title`, `status` and a `correlationId` to quote to support.
+
+| Status | Meaning | What the UI should do |
+|---|---|---|
+| 400 | Invalid input; `errors` maps each field to its messages | Show each message under its field |
+| 401 | Not signed in, or the token expired | Refresh once; if that fails, go to the login screen |
+| 403 | Signed in, but not allowed | Show "you don't have access" |
+| 404 | Not found, or not yours | Show "not found" |
+| 409 / 422 | Conflicts with existing data, or breaks a business rule | Show `detail` |
+| 429 | Too many attempts | Wait `Retry-After` seconds |
+| 500 | Our fault | Show a generic message and the `correlationId` |
+
+### TypeScript types
+
+Generate them from the running API; don't write them by hand:
+
+```powershell
+npx --yes openapi-typescript@7.13.0 http://localhost:5146/openapi/v1.json -o matric-compass-api.d.ts
+```
+
+Regenerate whenever the API changes. A renamed or removed field then fails your build instead of your users' screens.
+
+### Configuration
+
+Every setting can be overridden with an environment variable. `__` stands for `:` in the setting's name.
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `ConnectionStrings__MatricCompass` | Yes | PostgreSQL connection string |
+| `Jwt__SigningKey` | Yes | At least 32 random bytes. **Secret** |
+| `SeedUsers__Password` | Yes, on first start | Password for the seeded accounts. **Secret** |
+| `Cors__AllowedOrigins__0` (`__1`, …) | In production | Frontend origins allowed to call the API with credentials |
+| `RateLimiting__Login__PermitLimit` / `__WindowSeconds` | No (5 / 60) | Login rate limit |
+| `BackgroundJobs__RefreshTokenCleanup__IntervalMinutes` / `__RetainExpiredDays` | No (60 / 30) | Expired-token cleanup schedule |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | No | Where to send telemetry |
+
+### Before production (known gaps)
+
+- **Migrations run at startup.** That's safe for one copy, but several replicas would race. Run them once from the deploy pipeline instead.
+- **TLS ends at a proxy.** Configure forwarded headers so the `Secure` cookie, redirects and the per-IP login limit see the real scheme and client IP.
+- **The rate limiter and the cleanup job are per process.** Three replicas means three times the limit, and the job runs three times. The job is idempotent, so that's harmless.
+- **No allowed origins are configured for production yet.** Set `Cors__AllowedOrigins__0`.
+- **The cleanup job has no index on `ExpiresAt`.** Fine at today's volume; add one before it isn't.
+
 ## Tech stack
 
 - **.NET 10** / ASP.NET Core Web API (controllers, not minimal APIs — see `Program.cs` for why)
@@ -138,7 +231,6 @@ This is a teaching snapshot, not a finished product. Known gaps, left in deliber
 
 - **Only `Student` and `BursaryApplication` are backed by a real database.** `TertiaryApplication` and `AptitudeTest` are still `Dictionary<Guid, T>` in-memory repositories (`Infrastructure/Data/InMemoryRepository.cs`) — restarting the app resets them. `EfStudentRepository`/`EfBursaryApplicationRepository` are the template the same swap gets applied to for the other two.
 - **`Student.SubjectCodes`, `BursaryApplication.RequiredDocuments`, and `AptitudeTest.RecommendedCareers` are not persisted.** They're computed, read-only wrapper properties over a private field, which EF Core can't map — `MatricCompassDbContext.OnModelCreating` explicitly `Ignore()`s all three for now. Concretely: seeded subjects currently do **not** survive a read back from Postgres (`GET /api/students` shows `subjectCodes: []`). The real fix is replacing `SubjectCodes` with a proper `Subject` entity and a one-to-many relationship, not a workaround to make the existing shape persist.
-- **No authentication/authorization.** Every endpoint is open.
 - **`TertiaryApplication` is read-only** — no create/update/delete endpoint yet, and no service layer for advancing an application through its status pipeline (`Researching` → ... → `Accepted`/`Rejected`).
 - **Not every endpoint has a `[ProducesResponseType]`/XML summary yet** — every `GetAll` action (across all four controllers) is undocumented and untested by design, as a standing exercise in applying the same pattern already used everywhere else.
 - **`orderBy=amount` has no supporting index** on `BursaryApplication` paging — it's on the sort allow-list, so at large volume it sorts the student's whole history instead of walking an index.

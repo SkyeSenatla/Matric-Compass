@@ -23,7 +23,7 @@ public class ErrorShapeTests
 
     private async Task<Guid> GetSeededStudentIdAsync(string learnerReferenceNumber)
     {
-        var students = await _client.GetFromJsonAsync<JsonElement>("/api/students");
+        var students = await _client.GetFromJsonAsync<JsonElement>("/api/v1/students");
         var match = students.EnumerateArray()
             .First(s => s.GetProperty("learnerReferenceNumber").GetString() == learnerReferenceNumber);
         return match.GetProperty("id").GetGuid();
@@ -43,7 +43,7 @@ public class ErrorShapeTests
     {
         var studentId = await GetSeededStudentIdAsync("LRN-2026-00114");
 
-        var response = await _client.PostAsJsonAsync("/api/bursary-applications", new
+        var response = await _client.PostAsJsonAsync("/api/v1/bursary-applications", new
         {
             studentId,
             funder = "", // blank funder — fails BursaryApplicationCreateRequestValidator.RuleFor(x => x.Funder)
@@ -63,7 +63,7 @@ public class ErrorShapeTests
         // BursaryApplicationService's duplicate-active-application rule.
         var studentId = await GetSeededStudentIdAsync("LRN-2026-00114");
 
-        var response = await _client.PostAsJsonAsync("/api/bursary-applications", new
+        var response = await _client.PostAsJsonAsync("/api/v1/bursary-applications", new
         {
             studentId,
             funder = "NSFAS",
@@ -80,7 +80,7 @@ public class ErrorShapeTests
     {
         var studentId = await GetSeededStudentIdAsync("LRN-2026-00287");
 
-        var response = await _client.PostAsJsonAsync("/api/bursary-applications", new
+        var response = await _client.PostAsJsonAsync("/api/v1/bursary-applications", new
         {
             studentId,
             funder = "Funza Lushaka Top-Up", // a funder this student has no active application with
@@ -95,7 +95,7 @@ public class ErrorShapeTests
     [Fact]
     public async Task Unknown_id_returns_404()
     {
-        var response = await _client.GetAsync($"/api/bursary-applications/{Guid.Empty}");
+        var response = await _client.GetAsync($"/api/v1/bursary-applications/{Guid.Empty}");
 
         await AssertProblemAsync(response, HttpStatusCode.NotFound, "NotFoundException");
     }

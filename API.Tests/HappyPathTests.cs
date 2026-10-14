@@ -19,7 +19,7 @@ public class HappyPathTests
     [Fact]
     public async Task GetStudents_returns_the_seeded_students()
     {
-        var response = await _client.GetAsync("/api/students");
+        var response = await _client.GetAsync("/api/v1/students");
 
         response.EnsureSuccessStatusCode();
         var students = await response.Content.ReadFromJsonAsync<List<StudentResponse>>();
@@ -29,10 +29,10 @@ public class HappyPathTests
     [Fact]
     public async Task CreateAptitudeTest_returns_201_with_a_Location_header_and_recommendations()
     {
-        var students = await _client.GetFromJsonAsync<List<StudentResponse>>("/api/students");
+        var students = await _client.GetFromJsonAsync<List<StudentResponse>>("/api/v1/students");
         var studentId = students!.First().Id;
 
-        var response = await _client.PostAsJsonAsync("/api/aptitude-tests", new
+        var response = await _client.PostAsJsonAsync("/api/v1/aptitude-tests", new
         {
             studentId,
             testType = "Career Interest Inventory",
@@ -50,8 +50,8 @@ public class HappyPathTests
     [Fact]
     public async Task UpdateBursaryApplication_returns_204_and_the_change_is_visible_on_a_later_GET()
     {
-        var students = await _client.GetFromJsonAsync<List<StudentResponse>>("/api/students");
-        var created = await _client.PostAsJsonAsync("/api/bursary-applications", new
+        var students = await _client.GetFromJsonAsync<List<StudentResponse>>("/api/v1/students");
+        var created = await _client.PostAsJsonAsync("/api/v1/bursary-applications", new
         {
             studentId = students!.Last().Id,
             // Unique per run: bursary applications persist in Postgres since
@@ -65,14 +65,14 @@ public class HappyPathTests
         var application = await created.Content.ReadFromJsonAsync<BursaryApplicationResponse>();
 
         var updateResponse = await _client.PutAsJsonAsync(
-            $"/api/bursary-applications/{application!.Id}",
+            $"/api/v1/bursary-applications/{application!.Id}",
             // Week 5 Day 3: an update must say which version it's based on.
             new { amount = 2500m, deadline = DateTime.UtcNow.AddMonths(4), version = application.Version });
 
         Assert.Equal(HttpStatusCode.NoContent, updateResponse.StatusCode);
 
         var reread = await _client.GetFromJsonAsync<BursaryApplicationResponse>(
-            $"/api/bursary-applications/{application.Id}");
+            $"/api/v1/bursary-applications/{application.Id}");
         Assert.Equal(2500m, reread!.Amount);
     }
 }

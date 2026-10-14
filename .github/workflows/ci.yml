@@ -1,0 +1,41 @@
+# Week 6 Day 4: every push to main and every pull request is built and tested
+# on a clean Linux machine that has never seen your laptop. No dev database,
+# no user-secrets: the tests start their own PostgreSQL with Testcontainers
+# (the runner has Docker), and PostgresApiFactory supplies test-only secrets.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release
+
+  image:
+    name: Build the Docker image
+    # Only once the tests pass: never package code that fails its tests.
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build
+        run: docker build --tag matric-compass-api:${{ github.sha }} .

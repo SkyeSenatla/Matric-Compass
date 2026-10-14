@@ -41,7 +41,7 @@ public class ObservabilityTests
     [Fact]
     public async Task An_error_from_our_handler_carries_the_callers_trace_id()
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, $"/api/students/{Guid.NewGuid()}");
+        var request = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/students/{Guid.NewGuid()}");
         request.Headers.Add("traceparent", TraceParent);
 
         var response = await _factory.CreateAdminClient().SendAsync(request);
@@ -56,7 +56,7 @@ public class ObservabilityTests
     {
         // No token: this 401 comes from the authorization middleware, not from
         // DomainExceptionHandler — CustomizeProblemDetails is what adds the id.
-        var request = new HttpRequestMessage(HttpMethod.Get, "/api/students");
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/students");
         request.Headers.Add("traceparent", TraceParent);
 
         var response = await _factory.CreateClient().SendAsync(request);

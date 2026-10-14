@@ -22,12 +22,12 @@ public class IdempotencyTests
     [Fact]
     public async Task Deleting_the_same_student_twice_is_204_then_404_but_idempotent_in_effect()
     {
-        var created = await _client.PostAsJsonAsync("/api/students",
+        var created = await _client.PostAsJsonAsync("/api/v1/students",
             new { fullName = "Palesa Mokoena", learnerReferenceNumber = $"LRN-TEST-{Guid.NewGuid():N}" });
         var student = await created.Content.ReadFromJsonAsync<StudentResponse>();
 
-        var firstDelete = await _client.DeleteAsync($"/api/students/{student!.Id}");
-        var secondDelete = await _client.DeleteAsync($"/api/students/{student.Id}");
+        var firstDelete = await _client.DeleteAsync($"/api/v1/students/{student!.Id}");
+        var secondDelete = await _client.DeleteAsync($"/api/v1/students/{student.Id}");
 
         Assert.Equal(HttpStatusCode.NoContent, firstDelete.StatusCode);  // deleted
         Assert.Equal(HttpStatusCode.NotFound, secondDelete.StatusCode);  // already gone
@@ -35,7 +35,7 @@ public class IdempotencyTests
         // The status code changed between calls — the END STATE didn't: the
         // student is gone either way. THAT'S the idempotency guarantee DELETE
         // makes, not "always 204."
-        var getAfter = await _client.GetAsync($"/api/students/{student.Id}");
+        var getAfter = await _client.GetAsync($"/api/v1/students/{student.Id}");
         Assert.Equal(HttpStatusCode.NotFound, getAfter.StatusCode);
     }
 
@@ -58,15 +58,15 @@ public class IdempotencyTests
         // and gets 409. An identical payload has to be identical after the
         // round trip, not just in the C# source.
         var deadline = DateTime.UtcNow.Date.AddMonths(2);
-        var students = await _client.GetFromJsonAsync<List<StudentResponse>>("/api/students");
-        var created = await _client.PostAsJsonAsync("/api/bursary-applications", new
+        var students = await _client.GetFromJsonAsync<List<StudentResponse>>("/api/v1/students");
+        var created = await _client.PostAsJsonAsync("/api/v1/bursary-applications", new
         {
             // Unique per run — see HappyPathTests' bursary update test.
             studentId = students!.First().Id, funder = $"MTN Bursary {Guid.NewGuid():N}", amount = 1000m,
             deadline, requiredDocuments = Array.Empty<string>()
         });
         var application = await created.Content.ReadFromJsonAsync<BursaryApplicationResponse>();
-        var url = $"/api/bursary-applications/{application!.Id}";
+        var url = $"/api/v1/bursary-applications/{application!.Id}";
         var payload = new { amount = 1500m, deadline, version = application.Version };
 
         var first = await _client.PutAsJsonAsync(url, payload);
@@ -84,8 +84,8 @@ public class IdempotencyTests
     [InlineData(100)] // upper boundary — must pass
     public async Task AptitudeTest_score_at_the_inclusive_boundary_is_accepted(int score)
     {
-        var students = await _client.GetFromJsonAsync<List<StudentResponse>>("/api/students");
-        var response = await _client.PostAsJsonAsync("/api/aptitude-tests", new
+        var students = await _client.GetFromJsonAsync<List<StudentResponse>>("/api/v1/students");
+        var response = await _client.PostAsJsonAsync("/api/v1/aptitude-tests", new
         {
             studentId = students!.First().Id, testType = "Boundary Check",
             dateTaken = DateTime.UtcNow, score
@@ -102,8 +102,8 @@ public class IdempotencyTests
         // FluentValidation's InclusiveBetween(0, 100) rejects these before the
         // AptitudeTest constructor's own guard clause ever runs — this test is
         // pinned to the validator's behavior, not the entity's, on purpose.
-        var students = await _client.GetFromJsonAsync<List<StudentResponse>>("/api/students");
-        var response = await _client.PostAsJsonAsync("/api/aptitude-tests", new
+        var students = await _client.GetFromJsonAsync<List<StudentResponse>>("/api/v1/students");
+        var response = await _client.PostAsJsonAsync("/api/v1/aptitude-tests", new
         {
             studentId = students!.First().Id, testType = "Boundary Check",
             dateTaken = DateTime.UtcNow, score
@@ -118,8 +118,8 @@ public class IdempotencyTests
         // request.Deadline.Date < DateTime.UtcNow.Date — today fails "<", so
         // today is accepted. A test that only tried yesterday and tomorrow
         // would miss this exact boundary silently passing either way.
-        var students = await _client.GetFromJsonAsync<List<StudentResponse>>("/api/students");
-        var response = await _client.PostAsJsonAsync("/api/bursary-applications", new
+        var students = await _client.GetFromJsonAsync<List<StudentResponse>>("/api/v1/students");
+        var response = await _client.PostAsJsonAsync("/api/v1/bursary-applications", new
         {
             studentId = students!.Last().Id, funder = $"Today Boundary Fund {Guid.NewGuid():N}", amount = 500m,
             deadline = DateTime.UtcNow.Date, requiredDocuments = Array.Empty<string>()

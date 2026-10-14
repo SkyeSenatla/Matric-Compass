@@ -10,6 +10,10 @@ obj/
 # Rider
 .idea/
 
+# Week 6 Day 4: real secrets for docker compose. Never committed —
+# .env.example (committed) lists the names, never the values.
+.env
+
 # OS files
 .DS_Store
 Thumbs.db

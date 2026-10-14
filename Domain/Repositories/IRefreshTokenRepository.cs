@@ -16,4 +16,8 @@ public interface IRefreshTokenRepository
     // Revokes every still-active token in the family, straight in the
     // database (one UPDATE), and commits immediately.
     Task RevokeFamilyAsync(Guid familyId, DateTime now);
+
+    // Week 6 Day 4: deletes tokens that expired before the cutoff, straight
+    // in the database (one DELETE). Returns how many rows went.
+    Task<int> DeleteExpiredBeforeAsync(DateTime cutoff, CancellationToken cancellationToken);
 }

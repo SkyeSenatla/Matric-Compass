@@ -1,0 +1,12 @@
+# Week 6 Day 4: what never goes into the build context. Smaller context,
+# faster builds — and no local secrets or build output baked into an image.
+**/bin/
+**/obj/
+**/TestResults/
+.git/
+.github/
+.vs/
+.vscode/
+.idea/
+**/*.user
+.env
