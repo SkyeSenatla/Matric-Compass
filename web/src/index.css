@@ -1,0 +1,7 @@
+/* Just enough to be readable. Tailwind and shadcn/ui arrive on Day 2. */
+body { font-family: system-ui, sans-serif; margin: 0 auto; max-width: 64rem; padding: 1rem; }
+.grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); }
+.card { border: 1px solid #ccc; border-radius: 0.5rem; padding: 1rem; }
+.muted { color: #666; }
+.amount { font-size: 1.5rem; font-weight: 600; }
+.pipeline .done { font-weight: 600; }
