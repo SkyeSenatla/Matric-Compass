@@ -6,6 +6,17 @@
     <!-- No icon yet: an empty one stops the browser asking for /favicon.ico (a 404). -->
     <link rel="icon" href="data:," />
     <title>Matric Compass</title>
+    <!-- Runs before React and before the page paints, so a dark-mode user
+         never sees a white flash. Same storage key as src/lib/theme.ts. -->
+    <script>
+      try {
+        const stored = localStorage.getItem('matric-compass-theme')
+        const dark =
+          stored === 'dark' ||
+          (stored !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.classList.toggle('dark', dark)
+      } catch {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

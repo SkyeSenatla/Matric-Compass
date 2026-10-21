@@ -1,7 +1,11 @@
 import { useState } from 'react'
-import type { DashboardBursaryApplication } from '../api/types'
-import { formatDate } from '../lib/dates'
-import { formatCents } from '../lib/money'
+import type { DashboardBursaryApplication } from '@/api/types'
+import { DeadlineCountdown } from '@/components/DeadlineCountdown'
+import { StatusBadge } from '@/components/StatusBadge'
+import { Button } from '@/components/ui/button'
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { formatDate } from '@/lib/dates'
+import { formatCents } from '@/lib/money'
 
 type BursaryApplicationCardProps = {
   application: DashboardBursaryApplication
@@ -11,34 +15,37 @@ export function BursaryApplicationCard({ application }: BursaryApplicationCardPr
   const [showDetails, setShowDetails] = useState(false)
 
   return (
-    <article className="card">
-      <h3>{application.funder}</h3>
-      <p className="amount">{formatCents(application.amountInCents)}</p>
-      <p>
-        Status: <strong>{application.status}</strong>
-      </p>
-      <p>{describeDeadline(application.daysUntilDeadline)}</p>
+    <Card>
+      <CardHeader>
+        {/* shadcn's CardTitle is a <div>. The <h3> keeps the heading that
+            screen-reader users jump between. */}
+        <CardTitle>
+          <h3>{application.funder}</h3>
+        </CardTitle>
+        <CardAction>
+          <StatusBadge status={application.status} />
+        </CardAction>
+      </CardHeader>
 
-      <button type="button" onClick={() => setShowDetails(!showDetails)}>
-        {showDetails ? 'Hide details' : 'Show details'}
-      </button>
+      <CardContent className="space-y-3">
+        <p className="text-2xl font-semibold tabular-nums">
+          {formatCents(application.amountInCents)}
+        </p>
+        <DeadlineCountdown deadline={application.deadline} />
 
-      {showDetails && (
-        <dl>
-          <dt>Deadline</dt>
-          <dd>{formatDate(application.deadline)}</dd>
-          <dt>Reference</dt>
-          <dd>{application.id}</dd>
-        </dl>
-      )}
-    </article>
+        <Button variant="outline" size="sm" onClick={() => setShowDetails(!showDetails)}>
+          {showDetails ? 'Hide details' : 'Show details'}
+        </Button>
+
+        {showDetails && (
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+            <dt className="text-muted-foreground">Deadline</dt>
+            <dd>{formatDate(application.deadline)}</dd>
+            <dt className="text-muted-foreground">Reference</dt>
+            <dd className="font-mono text-xs">{application.id}</dd>
+          </dl>
+        )}
+      </CardContent>
+    </Card>
   )
-}
-
-// The server worked out daysUntilDeadline with its own clock, so a phone with
-// the wrong date can't make a deadline look further away than it is.
-function describeDeadline(days: number): string {
-  if (days < 0) return `Deadline passed ${Math.abs(days)} day(s) ago`
-  if (days === 0) return 'Deadline is today'
-  return `Due in ${days} day(s)`
 }

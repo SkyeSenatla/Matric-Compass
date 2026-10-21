@@ -19,4 +19,15 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // shadcn/ui's copied components export their style variants
+    // (badgeVariants, buttonVariants) next to the component. That only
+    // affects hot reload, so we switch this one rule off for those files
+    // rather than editing code we copied. The React Hooks and compiler
+    // rules still apply to them.
+    files: ['src/components/ui/**/*.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])

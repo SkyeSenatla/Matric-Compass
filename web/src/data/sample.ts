@@ -26,12 +26,22 @@ export const students: StudentResponse[] = [
   },
 ]
 
+// Day 2: the deadlines are relative to when the page loads. Day 1's fixed
+// dates went stale as soon as the calendar moved on, and a LIVE countdown
+// would show every one of them as closed. Day 3 replaces all of this with
+// live data from the API.
+const HOUR = 60 * 60 * 1000
+const DAY = 24 * HOUR
+const loadedAt = Date.now()
+const deadlineIn = (ms: number) => new Date(loadedAt + ms).toISOString()
+
+// One application for each of the five bursary statuses.
 export const bursaryApplications: DashboardBursaryApplication[] = [
   {
     id: '0b9e2f6c-3a1d-4e57-9c8b-1f2e3d4c5b6a',
     funder: 'NSFAS',
     status: 'Submitted',
-    deadline: '2026-11-30T21:59:59Z',
+    deadline: deadlineIn(46 * DAY),
     daysUntilDeadline: 46,
     amountInCents: 4_500_010,
   },
@@ -39,7 +49,8 @@ export const bursaryApplications: DashboardBursaryApplication[] = [
     id: '7c6d5e4f-3b2a-4190-8f7e-6d5c4b3a2918',
     funder: 'Funza Lushaka',
     status: 'Draft',
-    deadline: '2026-10-15T21:59:59Z',
+    // Under a day away, so this card counts down in hours, minutes, seconds.
+    deadline: deadlineIn(5 * HOUR),
     daysUntilDeadline: 0,
     amountInCents: 3_200_000,
   },
@@ -47,9 +58,25 @@ export const bursaryApplications: DashboardBursaryApplication[] = [
     id: 'e1d2c3b4-a596-4877-b6a5-948372615049',
     funder: 'Sasol',
     status: 'Rejected',
-    deadline: '2026-09-30T21:59:59Z',
+    deadline: deadlineIn(-15 * DAY),
     daysUntilDeadline: -15,
     amountInCents: 10,
+  },
+  {
+    id: '3f4e5d6c-7b8a-4912-a3b4-c5d6e7f80912',
+    funder: 'Allan Gray Orbis',
+    status: 'UnderReview',
+    deadline: deadlineIn(12 * DAY),
+    daysUntilDeadline: 12,
+    amountInCents: 6_000_000,
+  },
+  {
+    id: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
+    funder: 'Investec',
+    status: 'Approved',
+    deadline: deadlineIn(-30 * DAY),
+    daysUntilDeadline: -30,
+    amountInCents: 5_550_000,
   },
 ]
 
