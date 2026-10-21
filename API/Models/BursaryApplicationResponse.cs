@@ -1,12 +1,15 @@
 namespace API.Models;
 
+using API.Common;
 using Domain.Entities;
 
 public record BursaryApplicationResponse(
     Guid Id,
     Guid StudentId,
     string Funder,
-    decimal Amount,
+    // Week 7 Day 3: was "decimal Amount" — a JSON number with a fraction,
+    // which breaks the handoff rule that money is integer cents.
+    long AmountInCents,
     DateTime Deadline,
     string Status,
     IReadOnlyCollection<string> RequiredDocuments,
@@ -15,7 +18,7 @@ public record BursaryApplicationResponse(
     uint Version)
 {
     public static BursaryApplicationResponse FromEntity(BursaryApplication application) =>
-        new(application.Id, application.StudentId, application.Funder, application.Amount,
+        new(application.Id, application.StudentId, application.Funder, Money.ToCents(application.Amount),
             application.Deadline, application.Status.ToString(), application.RequiredDocuments,
             application.Version);
 }

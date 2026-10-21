@@ -515,6 +515,33 @@ using (var scope = app.Services.CreateScope())
                 new[] { "Certified ID Copy", "Academic Transcript" }));
     }
 
+    // Week 7 Day 3: the frontend's counsellor list is paged at 10, and two
+    // applications can't show a second page. A third, demo-only learner gets
+    // twelve more. Development only, and guarded by her LRN so a restart
+    // never duplicates them. Thandiwe and Sipho are left exactly as they
+    // were, so nothing that depends on their data changes.
+    if (app.Environment.IsDevelopment() && await studentRepository.GetByLrnAsync("LRN-2026-00342") is null)
+    {
+        var ayanda = new Student("Ayanda Zulu", "LRN-2026-00342");
+        ayanda.EnrollSubject("MATH", 70);
+        ayanda.EnrollSubject("PHSC", 72);
+        ayanda.EnrollSubject("ENGL", 75);
+        dbContext.Students.Add(ayanda);
+        await dbContext.SaveChangesAsync();
+
+        var funders = new[]
+        {
+            "Allan Gray Orbis", "Sasol", "Investec", "Old Mutual", "Anglo American", "Standard Bank",
+            "Discovery", "Eskom", "Transnet", "Absa", "Nedbank", "Capitec"
+        };
+        for (var i = 0; i < funders.Length; i++)
+        {
+            await bursaryApplicationRepository.AddAsync(
+                new BursaryApplication(ayanda.Id, funders[i], 20000m + 2500m * i,
+                    DateTime.UtcNow.AddDays(14 + 7 * i), new[] { "Certified ID Copy" }));
+        }
+    }
+
     // Week 6 Day 1: three accounts to demo with — one per role. The password
     // comes from user-secrets, never from source code.
     if (thandiwe is not null && !await dbContext.Users.AnyAsync())

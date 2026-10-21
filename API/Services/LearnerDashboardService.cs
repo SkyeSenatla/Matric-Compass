@@ -1,5 +1,6 @@
 namespace API.Services;
 
+using API.Common;
 using API.Models;
 using Domain.Exceptions;
 using Domain.Repositories;
@@ -51,7 +52,7 @@ public class LearnerDashboardService
                     application.Status.ToString(),
                     application.Deadline,
                     DaysUntilDeadline: (int)(application.Deadline.Date - today).TotalDays,
-                    AmountInCents: (long)Math.Round(application.Amount * 100m)))
+                    AmountInCents: Money.ToCents(application.Amount)))
                 .ToList());
     }
 }

@@ -73,6 +73,6 @@ public class HappyPathTests
 
         var reread = await _client.GetFromJsonAsync<BursaryApplicationResponse>(
             $"/api/v1/bursary-applications/{application.Id}");
-        Assert.Equal(2500m, reread!.Amount);
+        Assert.Equal(250_000, reread!.AmountInCents); // R2 500,00 in cents
     }
 }

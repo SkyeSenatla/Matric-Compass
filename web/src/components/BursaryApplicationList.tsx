@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { ArrowUpDown } from 'lucide-react'
-import type { DashboardBursaryApplication } from '@/api/types'
+import type { BursaryCardData } from '@/api/types'
 import { BursaryApplicationCard } from '@/components/BursaryApplicationCard'
 import { Button } from '@/components/ui/button'
 
 type BursaryApplicationListProps = {
-  applications: DashboardBursaryApplication[]
+  applications: BursaryCardData[]
 }
 
 // Owns the sort order: only this list and its button use it, so this is its

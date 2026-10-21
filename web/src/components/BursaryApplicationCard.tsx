@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { DashboardBursaryApplication } from '@/api/types'
+import type { BursaryCardData } from '@/api/types'
 import { DeadlineCountdown } from '@/components/DeadlineCountdown'
 import { StatusBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,7 @@ import { formatDate } from '@/lib/dates'
 import { formatCents } from '@/lib/money'
 
 type BursaryApplicationCardProps = {
-  application: DashboardBursaryApplication
+  application: BursaryCardData
 }
 
 export function BursaryApplicationCard({ application }: BursaryApplicationCardProps) {

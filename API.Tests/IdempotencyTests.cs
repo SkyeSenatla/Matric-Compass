@@ -76,7 +76,7 @@ public class IdempotencyTests
         Assert.Equal(HttpStatusCode.NoContent, second.StatusCode);
 
         var after = await _client.GetFromJsonAsync<BursaryApplicationResponse>(url);
-        Assert.Equal(1500m, after!.Amount);
+        Assert.Equal(150_000, after!.AmountInCents); // R1 500,00 in cents
     }
 
     [Theory]

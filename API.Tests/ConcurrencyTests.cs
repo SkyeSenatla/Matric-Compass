@@ -86,6 +86,6 @@ public class ConcurrencyTests
 
         // And the first edit is still the one that stuck.
         var reread = await _client.GetFromJsonAsync<BursaryApplicationResponse>(url);
-        Assert.Equal(1500m, reread!.Amount);
+        Assert.Equal(150_000, reread!.AmountInCents); // R1 500,00 in cents
     }
 }

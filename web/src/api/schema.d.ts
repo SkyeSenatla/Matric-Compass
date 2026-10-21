@@ -537,6 +537,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Who the signed-in user is, and their role.
+         * @description The frontend uses the role to choose which screen to show. That's a
+         *     convenience, not security: every endpoint still checks the role itself.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The signed-in user. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["MeResponse"];
+                        "application/json": components["schemas"]["MeResponse"];
+                        "text/json": components["schemas"]["MeResponse"];
+                    };
+                };
+                /** @description No valid access token. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ProblemDetails"];
+                        "application/json": components["schemas"]["ProblemDetails"];
+                        "text/json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/dashboard": {
         parameters: {
             query?: never;
@@ -986,8 +1039,8 @@ export interface components {
             /** Format: uuid */
             studentId: string;
             funder: string;
-            /** Format: double */
-            amount: number;
+            /** Format: int64 */
+            amountInCents: number;
             /** Format: date-time */
             deadline: string;
             status: string;
@@ -1031,6 +1084,10 @@ export interface components {
         LoginRequest: {
             email: string;
             password: string;
+        };
+        MeResponse: {
+            email: string;
+            role: string;
         };
         PagedResponseOfBursaryApplicationResponse: {
             items: components["schemas"]["BursaryApplicationResponse"][];

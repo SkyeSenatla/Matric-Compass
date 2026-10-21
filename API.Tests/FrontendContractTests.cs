@@ -139,6 +139,41 @@ public class FrontendContractTests
         Assert.False(dashboard.TryGetProperty("learnerReferenceNumber", out _));
     }
 
+    // Week 7 Day 3: the counsellor's list reads this endpoint directly.
+    [Fact]
+    public async Task Bursary_applications_send_money_as_integer_cents()
+    {
+        var page = await _factory.CreateClientAs(Roles.Counsellor)
+            .GetFromJsonAsync<JsonElement>("/api/v1/bursary-applications?pageSize=50");
+
+        var nsfas = page.GetProperty("items").EnumerateArray()
+            .First(application => application.GetProperty("funder").GetString() == "NSFAS");
+        Assert.Equal(4_500_000, nsfas.GetProperty("amountInCents").GetInt64()); // R45 000,00
+        Assert.False(nsfas.TryGetProperty("amount", out _));
+    }
+
+    [Theory]
+    [InlineData(Roles.Learner)]
+    [InlineData(Roles.Counsellor)]
+    [InlineData(Roles.Admin)]
+    public async Task Anyone_signed_in_can_ask_who_they_are(string role)
+    {
+        var studentId = role == Roles.Learner ? await GetStudentIdAsync("LRN-2026-00114") : (Guid?)null;
+
+        var me = await _factory.CreateClientAs(role, studentId).GetFromJsonAsync<JsonElement>("/api/v1/me");
+
+        Assert.Equal(role, me.GetProperty("role").GetString());
+        Assert.False(string.IsNullOrEmpty(me.GetProperty("email").GetString()));
+    }
+
+    [Fact]
+    public async Task Who_am_I_needs_a_token()
+    {
+        var response = await _factory.CreateClient().GetAsync("/api/v1/me");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
     [Fact]
     public async Task Staff_get_403_from_the_learner_dashboard()
     {
