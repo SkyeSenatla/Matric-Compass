@@ -11,6 +11,7 @@ export type DashboardBursaryApplication = Schemas['DashboardBursaryApplication']
 export type BursaryApplicationResponse = Schemas['BursaryApplicationResponse']
 export type LearnerDashboardResponse = Schemas['LearnerDashboardResponse']
 export type MeResponse = Schemas['MeResponse']
+export type BursaryApplicationCreateRequest = Schemas['BursaryApplicationCreateRequest']
 
 // Day 3: the bursary card is now fed by TWO endpoints: the learner's
 // dashboard and the counsellor's paged list. Their response types differ,

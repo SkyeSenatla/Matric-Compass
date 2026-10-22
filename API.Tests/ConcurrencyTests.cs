@@ -32,7 +32,7 @@ public class ConcurrencyTests
         {
             studentId = students!.First().Id,
             funder = $"Concurrency Test Fund {Guid.NewGuid():N}",
-            amount = 1000m,
+            amountInCents = 100_000,
             deadline = DateTime.UtcNow.AddMonths(2),
             requiredDocuments = Array.Empty<string>()
         });
@@ -75,12 +75,12 @@ public class ConcurrencyTests
 
         // First edit, based on the version from the original read: succeeds.
         var first = await _client.PutAsJsonAsync(url,
-            new { amount = 1500m, deadline = application.Deadline, version = application.Version });
+            new { amountInCents = 150_000, deadline = application.Deadline, version = application.Version });
         Assert.Equal(HttpStatusCode.NoContent, first.StatusCode);
 
         // Second edit, based on that SAME (now stale) read: rejected.
         var second = await _client.PutAsJsonAsync(url,
-            new { amount = 1750m, deadline = application.Deadline, version = application.Version });
+            new { amountInCents = 175_000, deadline = application.Deadline, version = application.Version });
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
         Assert.Equal("application/problem+json", second.Content.Headers.ContentType?.MediaType);
 

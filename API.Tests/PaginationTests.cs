@@ -29,7 +29,7 @@ public class PaginationTests
         {
             var created = await _client.PostAsJsonAsync("/api/v1/bursary-applications", new
             {
-                studentId = student.Id, funder = $"Paging Fund {i}", amount = 1000m * i,
+                studentId = student.Id, funder = $"Paging Fund {i}", amountInCents = 100_000L * i,
                 deadline = DateTime.UtcNow.Date.AddDays(10 + i), requiredDocuments = Array.Empty<string>()
             });
             createdIds.Add((await created.Content.ReadFromJsonAsync<BursaryApplicationResponse>())!.Id);

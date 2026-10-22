@@ -62,12 +62,12 @@ public class IdempotencyTests
         var created = await _client.PostAsJsonAsync("/api/v1/bursary-applications", new
         {
             // Unique per run — see HappyPathTests' bursary update test.
-            studentId = students!.First().Id, funder = $"MTN Bursary {Guid.NewGuid():N}", amount = 1000m,
+            studentId = students!.First().Id, funder = $"MTN Bursary {Guid.NewGuid():N}", amountInCents = 100_000,
             deadline, requiredDocuments = Array.Empty<string>()
         });
         var application = await created.Content.ReadFromJsonAsync<BursaryApplicationResponse>();
         var url = $"/api/v1/bursary-applications/{application!.Id}";
-        var payload = new { amount = 1500m, deadline, version = application.Version };
+        var payload = new { amountInCents = 150_000, deadline, version = application.Version };
 
         var first = await _client.PutAsJsonAsync(url, payload);
         var second = await _client.PutAsJsonAsync(url, payload);
@@ -121,7 +121,7 @@ public class IdempotencyTests
         var students = await _client.GetFromJsonAsync<List<StudentResponse>>("/api/v1/students");
         var response = await _client.PostAsJsonAsync("/api/v1/bursary-applications", new
         {
-            studentId = students!.Last().Id, funder = $"Today Boundary Fund {Guid.NewGuid():N}", amount = 500m,
+            studentId = students!.Last().Id, funder = $"Today Boundary Fund {Guid.NewGuid():N}", amountInCents = 50_000,
             deadline = DateTime.UtcNow.Date, requiredDocuments = Array.Empty<string>()
         });
 

@@ -58,7 +58,7 @@ public class HappyPathTests
             // Week 5 Day 2, so a fixed funder name would hit the
             // duplicate-active-application rule (409) on the second run.
             funder = $"Thuthuka Bursary Fund {Guid.NewGuid():N}",
-            amount = 1000m,
+            amountInCents = 100_000,
             deadline = DateTime.UtcNow.AddMonths(3),
             requiredDocuments = Array.Empty<string>()
         });
@@ -67,7 +67,7 @@ public class HappyPathTests
         var updateResponse = await _client.PutAsJsonAsync(
             $"/api/v1/bursary-applications/{application!.Id}",
             // Week 5 Day 3: an update must say which version it's based on.
-            new { amount = 2500m, deadline = DateTime.UtcNow.AddMonths(4), version = application.Version });
+            new { amountInCents = 250_000, deadline = DateTime.UtcNow.AddMonths(4), version = application.Version });
 
         Assert.Equal(HttpStatusCode.NoContent, updateResponse.StatusCode);
 

@@ -1,4 +1,5 @@
 import { useStudents } from '@/api/queries'
+import { BursaryApplicationForm } from '@/components/BursaryApplicationForm'
 import { BursaryApplicationPages } from '@/components/BursaryApplicationPages'
 import { CardSkeletons } from '@/components/CardSkeletons'
 import { ErrorView } from '@/components/ErrorView'
@@ -29,6 +30,7 @@ export function StaffView() {
 
       <section className="space-y-4">
         <h2 className="text-xl font-semibold">Bursary applications</h2>
+        <BursaryApplicationForm />
         <BursaryApplicationPages />
       </section>
     </div>

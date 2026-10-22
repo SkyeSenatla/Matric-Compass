@@ -47,7 +47,7 @@ public class ErrorShapeTests
         {
             studentId,
             funder = "", // blank funder — fails BursaryApplicationCreateRequestValidator.RuleFor(x => x.Funder)
-            amount = 100,
+            amountInCents = 10_000,
             deadline = DateTime.UtcNow.AddMonths(1),
             requiredDocuments = Array.Empty<string>()
         });
@@ -67,7 +67,7 @@ public class ErrorShapeTests
         {
             studentId,
             funder = "NSFAS",
-            amount = 100,
+            amountInCents = 10_000,
             deadline = DateTime.UtcNow.AddMonths(1),
             requiredDocuments = Array.Empty<string>()
         });
@@ -84,7 +84,7 @@ public class ErrorShapeTests
         {
             studentId,
             funder = "Funza Lushaka Top-Up", // a funder this student has no active application with
-            amount = 100,
+            amountInCents = 10_000,
             deadline = DateTime.UtcNow.AddDays(-1), // in the past
             requiredDocuments = Array.Empty<string>()
         });

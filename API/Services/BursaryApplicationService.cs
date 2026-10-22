@@ -43,7 +43,7 @@ public class BursaryApplicationService : IBursaryApplicationService
             throw new ConflictException($"This student already has an active bursary application with {request.Funder}.");
 
         var application = new BursaryApplication(
-            request.StudentId, request.Funder, request.Amount, request.Deadline, request.RequiredDocuments);
+            request.StudentId, request.Funder, Money.ToRands(request.AmountInCents), request.Deadline, request.RequiredDocuments);
 
         await _bursaryApplicationRepository.AddAsync(application);
 

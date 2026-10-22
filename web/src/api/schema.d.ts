@@ -1027,8 +1027,8 @@ export interface components {
             /** Format: uuid */
             studentId: string;
             funder: string;
-            /** Format: double */
-            amount: number;
+            /** Format: int64 */
+            amountInCents: number;
             /** Format: date-time */
             deadline: string;
             requiredDocuments: string[];
@@ -1049,8 +1049,8 @@ export interface components {
             version: number;
         };
         BursaryApplicationUpdateRequest: {
-            /** Format: double */
-            amount: number;
+            /** Format: int64 */
+            amountInCents: number;
             /** Format: date-time */
             deadline: string;
             /** Format: uint32 */

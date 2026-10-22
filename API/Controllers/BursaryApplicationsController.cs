@@ -135,7 +135,7 @@ public class BursaryApplicationsController : ControllerBase
         if (application is null || !await CanAccessStudentDataAsync(application.StudentId))
             throw new NotFoundException($"Bursary application {id} was not found.");
 
-        application.UpdateDetails(request.Amount, request.Deadline);
+        application.UpdateDetails(Money.ToRands(request.AmountInCents), request.Deadline);
 
         // Week 5 Day 3: pass the client's Version through — a stale one makes
         // SaveChanges throw DbUpdateConcurrencyException, which

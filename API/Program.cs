@@ -69,6 +69,12 @@ builder.Services.AddControllers(options =>
     // must describe every number as "number OR string" — and the generated
     // TypeScript type becomes number | string. Strict: only real numbers.
     options.JsonSerializerOptions.NumberHandling = JsonNumberHandling.Strict;
+    // Week 7 Day 4: a date with no time zone ("2026-11-30") is read as UTC,
+    // not as an Unspecified DateTime that Npgsql refuses to save. Only here,
+    // not in the options below: it changes how a value is read, not the
+    // contract, and a custom converter there would change how the OpenAPI
+    // document describes every DateTime.
+    options.JsonSerializerOptions.Converters.Add(new UtcDateTimeConverter());
 }); // Register controller support
 // The OpenAPI document is built from THESE options (the minimal-API ones),
 // not the controller ones above, so both must say the same thing: one

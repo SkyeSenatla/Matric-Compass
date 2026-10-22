@@ -24,7 +24,7 @@ public class BursaryApplicationServiceTests
     {
         var service = CreateSut(out _);
         var request = new BursaryApplicationCreateRequest(
-            Guid.NewGuid(), "NSFAS", 1000m, DateTime.UtcNow.AddDays(-1), new List<string>());
+            Guid.NewGuid(), "NSFAS", 100_000, DateTime.UtcNow.AddDays(-1), new List<string>());
 
         await Assert.ThrowsAsync<UnprocessableEntityException>(() => service.CreateAsync(request));
     }
@@ -38,7 +38,7 @@ public class BursaryApplicationServiceTests
             studentId, "NSFAS", 5000m, DateTime.UtcNow.AddMonths(1), new List<string>()));
 
         var request = new BursaryApplicationCreateRequest(
-            studentId, "NSFAS", 1000m, DateTime.UtcNow.AddMonths(2), new List<string>());
+            studentId, "NSFAS", 100_000, DateTime.UtcNow.AddMonths(2), new List<string>());
 
         await Assert.ThrowsAsync<ConflictException>(() => service.CreateAsync(request));
     }
@@ -52,7 +52,7 @@ public class BursaryApplicationServiceTests
             studentId, "NSFAS", 5000m, DateTime.UtcNow.AddMonths(1), new List<string>()));
 
         var request = new BursaryApplicationCreateRequest(
-            studentId, "Funza Lushaka", 1000m, DateTime.UtcNow.AddMonths(2), new List<string>());
+            studentId, "Funza Lushaka", 100_000, DateTime.UtcNow.AddMonths(2), new List<string>());
         var result = await service.CreateAsync(request);
 
         Assert.Equal("Funza Lushaka", result.Funder);

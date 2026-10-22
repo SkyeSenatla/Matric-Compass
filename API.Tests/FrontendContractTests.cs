@@ -94,7 +94,7 @@ public class FrontendContractTests
         {
             studentId = await GetStudentIdAsync("LRN-2026-00114"),
             funder = "", // fails BursaryApplicationCreateRequestValidator
-            amount = 100,
+            amountInCents = 10_000,
             deadline = DateTime.UtcNow.AddMonths(1),
             requiredDocuments = Array.Empty<string>()
         });
@@ -111,7 +111,7 @@ public class FrontendContractTests
         {
             studentId = await GetStudentIdAsync("LRN-2026-00114"),
             funder = "Sasol Bursary",
-            amount = "100", // a string: strict number handling says no
+            amountInCents = "10000", // a string: strict number handling says no
             deadline = DateTime.UtcNow.AddMonths(1),
             requiredDocuments = Array.Empty<string>()
         });
@@ -172,6 +172,88 @@ public class FrontendContractTests
         var response = await _factory.CreateClient().GetAsync("/api/v1/me");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    // Week 7 Day 4: the bursary form sends what a person typed, converted to
+    // cents. R19,99 is the classic float trap (19.99 * 100 is
+    // 1998.9999999999998 in JavaScript), so it's the amount that proves cents
+    // survive the round trip exactly.
+    [Fact]
+    public async Task Creating_an_application_takes_money_as_integer_cents()
+    {
+        var response = await _factory.CreateClientAs(Roles.Counsellor).PostAsJsonAsync("/api/v1/bursary-applications", new
+        {
+            studentId = await GetStudentIdAsync("LRN-2026-00287"),
+            funder = $"Cents Fund {Guid.NewGuid():N}",
+            amountInCents = 1_999, // R19,99
+            deadline = DateTime.UtcNow.AddMonths(1),
+            requiredDocuments = Array.Empty<string>()
+        });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var created = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(1_999, created.GetProperty("amountInCents").GetInt64());
+    }
+
+    // Week 7 Day 4: the form shows errors["funder"] next to the funder field,
+    // so the key and the message are both part of the contract.
+    [Fact]
+    public async Task A_funder_over_100_characters_is_a_400_on_the_funder_field()
+    {
+        var response = await _factory.CreateClientAs(Roles.Counsellor).PostAsJsonAsync("/api/v1/bursary-applications", new
+        {
+            studentId = await GetStudentIdAsync("LRN-2026-00287"),
+            funder = new string('A', 101),
+            amountInCents = 10_000,
+            deadline = DateTime.UtcNow.AddMonths(1),
+            requiredDocuments = Array.Empty<string>()
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var messages = problem.GetProperty("errors").GetProperty("funder").EnumerateArray().Select(m => m.GetString());
+        Assert.Contains("Funder names are 100 characters or fewer.", messages);
+    }
+
+    // Week 7 Day 4: the frontend maps errors["amountInCents"] onto its
+    // amount field. If this key changed, the message would land nowhere.
+    [Fact]
+    public async Task A_zero_amount_is_reported_under_amountInCents()
+    {
+        var response = await _factory.CreateClientAs(Roles.Counsellor).PostAsJsonAsync("/api/v1/bursary-applications", new
+        {
+            studentId = await GetStudentIdAsync("LRN-2026-00287"),
+            funder = $"Zero Fund {Guid.NewGuid():N}",
+            amountInCents = 0,
+            deadline = DateTime.UtcNow.AddMonths(1),
+            requiredDocuments = Array.Empty<string>()
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(problem.GetProperty("errors").TryGetProperty("amountInCents", out _));
+    }
+
+    // Week 7 Day 4: <input type="date"> sends a date with no time zone. This
+    // was a 500 (Npgsql won't save an Unspecified DateTime) until
+    // UtcDateTimeConverter.
+    [Fact]
+    public async Task A_date_only_deadline_is_accepted_as_that_date_in_UTC()
+    {
+        var date = DateTime.UtcNow.AddMonths(1).ToString("yyyy-MM-dd");
+
+        var response = await _factory.CreateClientAs(Roles.Counsellor).PostAsJsonAsync("/api/v1/bursary-applications", new
+        {
+            studentId = await GetStudentIdAsync("LRN-2026-00287"),
+            funder = $"Date Fund {Guid.NewGuid():N}",
+            amountInCents = 10_000,
+            deadline = date,
+            requiredDocuments = Array.Empty<string>()
+        });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var created = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal($"{date}T00:00:00Z", created.GetProperty("deadline").GetString());
     }
 
     [Fact]
