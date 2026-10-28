@@ -3,8 +3,7 @@ import { api } from '@/api/client'
 import { authStats, expireAccessTokenForDemo } from '@/auth/session'
 import { Button } from '@/components/ui/button'
 
-// DEMO ONLY (App renders it in development builds only). Recreates the
-// moment five requests discover an expired token at the same time.
+
 export function DevAuthPanel() {
   const [result, setResult] = useState<string | null>(null)
 

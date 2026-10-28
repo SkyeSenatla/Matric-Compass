@@ -1,0 +1,11 @@
+[
+  { "name": "Chemical engineering", "requires": [{ "subject": "MATH", "minimum": 70 }, { "subject": "PHSC", "minimum": 70 }] },
+  { "name": "Medicine", "requires": [{ "subject": "MATH", "minimum": 70 }, { "subject": "PHSC", "minimum": 70 }, { "subject": "LIFE", "minimum": 70 }] },
+  { "name": "Actuarial science", "requires": [{ "subject": "MATH", "minimum": 80 }, { "subject": "ENGL", "minimum": 60 }] },
+  { "name": "Software development", "requires": [{ "subject": "MATH", "minimum": 60 }] },
+  { "name": "Nursing", "requires": [{ "subject": "LIFE", "minimum": 50 }, { "subject": "ENGL", "minimum": 50 }] },
+  { "name": "Teaching (foundation phase)", "requires": [{ "subject": "ENGL", "minimum": 60 }] },
+  { "name": "Journalism", "requires": [{ "subject": "ENGL", "minimum": 70 }] },
+  { "name": "Accounting", "requires": [{ "subject": "MATH", "minimum": 60 }, { "subject": "BSTD", "minimum": 60 }] },
+  { "name": "Hospitality management", "requires": [{ "subject": "MATL", "minimum": 50 }, { "subject": "ENGL", "minimum": 50 }] }
+]
