@@ -1,13 +1,18 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useEffect } from 'react'
 import { login, type LoginState } from '@/app/actions/auth'
 import { Button } from '@/components/ui/button'
+import { forgetPinnedStudents } from '@/stores/pinnedStudents'
 
 // A Client Component only because useActionState needs one: the form posts
 // straight to the login Server Action, and shows what it sends back.
 export function LoginForm({ expired, next }: { expired: boolean; next: string | null }) {
   const [state, formAction, pending] = useActionState<LoginState, FormData>(login, null)
+
+  // Day 4: whoever signs in next starts with no pins, even if the last
+  // session ended without a sign-out (it expired, or was revoked).
+  useEffect(forgetPinnedStudents, [])
 
   return (
     <form action={formAction} className="space-y-4">

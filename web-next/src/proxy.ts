@@ -11,8 +11,13 @@ export async function proxy(request: NextRequest) {
 
   // 1. Route protection, the quick kind: no session, no signed-in pages.
   // A convenience: pages and actions still check, and the API decides.
+  // Day 4: the browser fetches /bff/… with fetch(), which can't use a sign-in
+  // page. It gets a JSON 401 instead of a redirect.
+  const isBff = path.startsWith('/bff/')
+
   if (session === null) {
     if (path === '/login') return NextResponse.next()
+    if (isBff) return Response.json({ title: 'Your session has ended.' }, { status: 401 })
     const login = new URL('/login', request.url)
     if (path !== '/') login.searchParams.set('next', path)
     return NextResponse.redirect(login)
@@ -23,6 +28,11 @@ export async function proxy(request: NextRequest) {
 
   const refreshed = await refreshOnce(session)
   if (refreshed === null) {
+    if (isBff) {
+      const response = Response.json({ title: 'Your session has ended.' }, { status: 401 })
+      response.headers.append('Set-Cookie', `${SESSION_COOKIE}=; Path=/; Max-Age=0`)
+      return response
+    }
     // Expired, revoked or reused: sign in again, and say why.
     const response = NextResponse.redirect(new URL('/login?expired=1', request.url))
     response.cookies.delete(SESSION_COOKIE)

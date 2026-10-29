@@ -1,25 +1,29 @@
 import Link from 'next/link'
 import { Suspense } from 'react'
-import { logout } from '@/app/actions/auth'
-import { Button } from '@/components/ui/button'
 import { getSession } from '@/lib/session'
+import { PinnedStudentsNav } from './PinnedStudentsNav'
+import { Providers } from './Providers'
+import { SignOutButton } from './SignOutButton'
 
 // (app) is a route group: every signed-in page shares this sidebar layout,
 // and "(app)" never appears in a URL. The layout stays mounted while you
 // move between its pages.
 export default function SignedInLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-svh bg-background text-foreground md:grid md:grid-cols-[15rem_1fr]">
-      <aside className="space-y-6 border-b p-4 md:border-r md:border-b-0">
-        <p className="text-lg font-semibold">Matric Compass</p>
-        {/* Reading the session cookie is request-time work, so it waits
-            inside Suspense while the rest of the layout is sent at once. */}
-        <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
-          <SidebarNav />
-        </Suspense>
-      </aside>
-      <main className="min-w-0 px-4 py-6">{children}</main>
-    </div>
+    // Day 4: TanStack Query and the pinned-students store, for these pages only.
+    <Providers>
+      <div className="min-h-svh bg-background text-foreground md:grid md:grid-cols-[15rem_1fr]">
+        <aside className="space-y-6 border-b p-4 md:border-r md:border-b-0">
+          <p className="text-lg font-semibold">Matric Compass</p>
+          {/* Reading the session cookie is request-time work, so it waits
+              inside Suspense while the rest of the layout is sent at once. */}
+          <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
+            <SidebarNav />
+          </Suspense>
+        </aside>
+        <main className="min-w-0 px-4 py-6">{children}</main>
+      </div>
+    </Providers>
   )
 }
 
@@ -48,16 +52,12 @@ async function SidebarNav() {
           </li>
         ))}
       </ul>
+      {session.role !== 'Learner' && <PinnedStudentsNav />}
       <div className="space-y-2 text-sm">
         <p className="break-words text-muted-foreground">
           {session.email} · {session.role}
         </p>
-        {/* A form whose action is a Server Action: no JavaScript needed. */}
-        <form action={logout}>
-          <Button type="submit" variant="outline" size="sm">
-            Sign out
-          </Button>
-        </form>
+        <SignOutButton />
       </div>
     </nav>
   )

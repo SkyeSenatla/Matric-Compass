@@ -8,6 +8,7 @@ import { ErrorView } from '@/components/ErrorView'
 import { readOrFail, signedInApi } from '@/lib/api'
 import { careersFor, getCareerCatalogue } from '@/lib/careers'
 import { DeleteStudentForm } from './DeleteStudentForm'
+import { PinStudentButton } from './PinStudentButton'
 
 // Not async: it returns at once, so a click on a link shows the skeletons
 // straight away. params, the session and the API calls wait inside Suspense.
@@ -48,6 +49,9 @@ async function StudentDetails({ params }: Pick<PageProps<'/students/[id]'>, 'par
 
       {/* Role-based UI: a convenience. The API refuses anyone but an Admin. */}
       {session.role === 'Admin' && <DeleteStudentForm studentId={student.id} name={student.fullName} />}
+
+      {/* Day 4: pins live in the browser, in a Zustand store. */}
+      {session.role !== 'Learner' && <PinStudentButton id={student.id} name={student.fullName} />}
 
       <div className="space-y-2">
         <h2 className="font-medium">Subjects</h2>

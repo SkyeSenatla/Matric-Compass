@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { NuqsAdapter } from 'nuqs/adapters/next/app'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -16,7 +17,10 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: darkModeScript }} />
       </head>
-      <body>{children}</body>
+      <body>
+        {/* Day 4: lets nuqs read and write the URL's query string. */}
+        <NuqsAdapter>{children}</NuqsAdapter>
+      </body>
     </html>
   )
 }

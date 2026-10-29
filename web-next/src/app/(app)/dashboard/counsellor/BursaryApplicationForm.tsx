@@ -1,6 +1,7 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { useActionState, useEffect } from 'react'
 import { createBursaryApplication, type BursaryFormState } from '@/app/actions/bursaryApplications'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -23,6 +24,14 @@ type StudentOption = { id: string; label: string }
 export function BursaryApplicationForm({ students }: { students: StudentOption[] }) {
   const [state, formAction, pending] = useActionState(createBursaryApplication, initialState)
   const { values, fieldErrors } = state
+
+  // Day 4: refresh() rebuilt page one on the server, but pages two onwards
+  // were loaded in the browser. After a save, mark them stale so TanStack
+  // loads them again: Week 7's invalidateQueries, for the pages it owns.
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    if (state.saved !== null) void queryClient.invalidateQueries({ queryKey: ['bursary-applications'] })
+  }, [state, queryClient])
 
   return (
     <Card>
